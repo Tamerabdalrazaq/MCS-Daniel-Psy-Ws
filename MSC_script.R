@@ -7,16 +7,12 @@ MSC_PATH = "C:/Users/averr/OneDrive/Desktop/TAU/Year 4/Psych Workshop/Scripts/1.
 MSC <- read_csv(MSC_PATH)
 # Define script settings
 settings <- list(
-  remove_redundant_features = TRUE,
   filter_bad_detections = TRUE,
-  cluster_fixations = TRUE
+  cluster_fixations = TRUE,
+  features_to_remove = c("expected", "searcharray", "LAST_BUTTON_PRESSED", "im_h", "im_w")
 )
 
-
 # ****************** Helper Functions  ************************ 
-
-# ================================================================
-
 # ================================================================
 
 
@@ -59,22 +55,24 @@ MSC <<- MSC %>%
     img_res, .after = im_w
   )
   
- print(settings$remove_redundant_features)
+
 # Remove unnecessary features
-if (settings$remove_redundant_features) {
-  MSC$expected <- NULL
-  MSC$searcharray <- NULL
-  MSC$LAST_BUTTON_PRESSED  <- NULL
-  MSC$im_h <- NULL
-  MSC$im_w <- NULL
-}
+MSC <- MSC %>%
+   select(-all_of(settings$features_to_remove))
+
+
+# Sort by subjectnum, TRIAL_INDEX
+MSC <- MSC %>%
+  arrange(subjectnum, TRIAL_INDEX)
+
+
 # ================================================================
 
 
 
 
 # ****************** Filter Data  ************************ 
-# ================================================================
+
 # Filter incorrect image detections
 if (settings$filter_bad_detections) {
 MSC <<- MSC %>%
@@ -83,11 +81,21 @@ MSC <<- MSC %>%
       (condition == "absent" & is.na(OBJECT_X1))
   )
 }
+
+
+# Filter out inconsecutive trials
+MSC <- MSC %>%
+  group_by(subjectnum) %>%
+  filter(
+    is.na(lag(TRIAL_INDEX)) |  # Keep the first row in each group
+      TRIAL_INDEX == lag(TRIAL_INDEX) + 1  # Keep if consecutive
+  ) %>%
+  ungroup()  # Remove grouping if needed
 # ================================================================
 
 
 # ****************** Adding New Features  ************************ 
-# ================================================================
+
 # Add hit - is fixation inside object
 MSC <<- mutate(MSC, hit = ifelse(OBJECT_X1 <= CURRENT_FIX_X & 
                                        OBJECT_Y1 <= CURRENT_FIX_Y &
@@ -101,7 +109,7 @@ MSC <<- mutate(MSC, hit = ifelse(OBJECT_X1 <= CURRENT_FIX_X &
 
 
 # ****************** Clustering  ************************ 
-# ================================================================
+
 
 # Cluster similar rows by subjectnum and trial_index. Merge unique data into a single array.
  if (settings$cluster_fixations){
