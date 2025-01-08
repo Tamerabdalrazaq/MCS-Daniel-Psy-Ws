@@ -8,6 +8,7 @@ MSC <- read_csv(MSC_PATH)
 # Define script settings
 settings <- list(
   filter_bad_detections = TRUE,
+  filter_inconsecutive_trial = TRUE,
   cluster_fixations = TRUE,
   features_to_remove = c("expected", "searcharray", "LAST_BUTTON_PRESSED", "im_h", "im_w")
 )
@@ -84,13 +85,15 @@ MSC <<- MSC %>%
 
 
 # Filter out inconsecutive trials
-MSC <- MSC %>%
-  group_by(subjectnum) %>%
-  filter(
-    is.na(lag(TRIAL_INDEX)) |  # Keep the first row in each group
-      TRIAL_INDEX == lag(TRIAL_INDEX) + 1  # Keep if consecutive
-  ) %>%
-  ungroup()  # Remove grouping if needed
+if (settings$filter_inconsecutive_trial){
+  MSC <- MSC %>%
+    group_by(subjectnum) %>%
+    filter(
+      is.na(lag(TRIAL_INDEX)) |  # Keep the first row in each group
+        TRIAL_INDEX == lag(TRIAL_INDEX) + 1  # Keep if consecutive
+    ) %>%
+    ungroup()  # Remove grouping if needed
+}
 # ================================================================
 
 
