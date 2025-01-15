@@ -4,8 +4,9 @@ library(readr)
 library(tidyr)
 rm(list = ls())
 
-# Todo: Fix coordinates display problem
-# Check fixation landing on previous trial's object
+# TODO:
+# Take prev_hit from the second fixation not the first
+# Expand the prev_hit to all fixations
 
 DISPLAY_W <- 1280
 DISPLAY_H <- 800
@@ -80,7 +81,7 @@ MSC <- MSC %>%
 
 
 
-#MSC%>% filter(subjectnum == 1 & TRIAL_INDEX < 100) %>% ggplot()+geom_point(aes(x=CURRENT_FIX_X, y=CURRENT_FIX_Y))+ylim(0,800) +xlim(0,1280)
+MSC_ORIGINAL%>% filter( CURRENT_FIX_INDEX == 2) %>% ggplot()+geom_point(aes(x=CURRENT_FIX_X, y=CURRENT_FIX_Y))+ylim(0,800) +xlim(0,1280)
 
 
 # ******************   ************************ 
@@ -100,9 +101,6 @@ MSC <<- mutate(MSC, prev_hit = ifelse(lag(OBJECT_X1) <= CURRENT_FIX_X &
                                       , 1, 0))
 
 
-
-
-
 # ******************   ************************ 
 # ============================Clustering==================================== 
 
@@ -117,6 +115,8 @@ if (settings$cluster_fixations){
       img_res = first(img_res),
       img_name = first(img_name),
       TRIAL_FIXATION_TOTAL = first(TRIAL_FIXATION_TOTAL),
+      FIRST_FIX_X = first(CURRENT_FIX_X),
+      FIRST_FIX_Y = first(CURRENT_FIX_Y),
       CURRENT_FIX_X = list(CURRENT_FIX_X),
       CURRENT_FIX_Y = list(CURRENT_FIX_Y),
       CURRENT_FIX_DURATION = list(CURRENT_FIX_DURATION),
@@ -139,10 +139,8 @@ if (settings$cluster_fixations){
 #                                    values_from = c(CURRENT_FIX_X:CURRENT_FIX_DURATION)
 #)
 
-
 # ******************   ************************ 
 # =========================Filter Data=======================================
-
 # Filter incorrect image detections
 if (settings$filter_bad_detections) {
   MSC <<- MSC %>%
@@ -152,18 +150,72 @@ if (settings$filter_bad_detections) {
     )
 }
 
-
 # Filter out inconsecutive trials
 if (settings$filter_inconsecutive_trial){
   MSC <- MSC %>%
-    group_by(subjectnum) %>%
     filter(
-        TRIAL_INDEX == lag(TRIAL_INDEX) + 1 |
-        TRIAL_INDEX == lead(TRIAL_INDEX) - 1
-    ) %>%
-    ungroup() 
+        TRIAL_INDEX == lag(TRIAL_INDEX) + 1
+    )
 }
+
+
 
 if (settings$fliter_absent){
   MSC <- MSC %>% filter(condition == "present")
 }
+
+
+
+# get_projection <- function(x, y, x1, y1, x2, y2) {
+#   # Case 1: x1 <= x <= x2
+#   if (x1 <= x && x <= x2) {
+#     if (y <= y1) {
+#       return(c(x, y1)) # Project to (x, y1)
+#     } else if (y >= y2) {
+#       return(c(x, y2)) # Project to (x, y2)
+#     }
+#   }
+#   
+#   # Case 2: y1 <= y <= y2
+#   if (y1 <= y && y <= y2) {
+#     if (x <= x1) {
+#       return(c(x1, y)) # Project to (x1, y)
+#     } else if (x >= x2) {
+#       return(c(x2, y)) # Project to (x2, y)
+#     }
+#   }
+#   
+#   # Case 3: x' and y' are the closest points
+#   # x' = argmin_i(|x - x_i|), y' = argmin_i(|y - y_i|)
+#   x_prime <- ifelse(abs(x - x1) < abs(x - x2), x1, x2)
+#   y_prime <- ifelse(abs(y - y1) < abs(y - y2), y1, y2)
+#   return(c(x_prime, y_prime))
+# }
+# 
+# euc_l2 <- function(x1, y1, x2, y2) {
+#   # Calculate the Euclidean distance
+#   distance <- sqrt((x2 - x1)^2 + (y2 - y1)^2)
+#   return(distance)
+# }
+# 
+# calc_orthogonal_distance <- function(x, y, obj_x1, obj_y1, obj_x2, obj_y2) {
+#   projection <- get_projection(x, y, obj_x1, obj_y1, obj_x2, obj_y2)
+#   distance <- euc_l2(x, y, projection[1], projection[2])
+#   return(distance)
+# }
+# 
+# 
+# # Apply the function to the MSC dataset
+# MSC <- MSC %>%
+#   mutate(
+#     PREV_ORTHOGONAL_DISTANCE = ifelse(
+#       !is.na(CURRENT_FIX_X) & !is.na(CURRENT_FIX_Y) &
+#         !is.na(OBJECT_X1) & !is.na(OBJECT_Y1) & !is.na(OBJECT_X2) & !is.na(OBJECT_Y2),
+#       mapply(
+#         calc_orthogonal_distance,
+#         CURRENT_FIX_X, CURRENT_FIX_Y,
+#         OBJECT_X1, OBJECT_Y1, OBJECT_X2, OBJECT_Y2
+#       ),
+#       NA  # Assign NA if any required column has NA
+#     )
+#   )
