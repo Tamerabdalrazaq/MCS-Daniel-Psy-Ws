@@ -93,6 +93,12 @@ MSC <<- mutate(MSC, hit = ifelse(OBJECT_X1 <= CURRENT_FIX_X &
                                    OBJECT_Y2 >= CURRENT_FIX_Y
                                  , 1, 0))
 
+MSC <<- mutate(MSC, prev_hit = ifelse(lag(OBJECT_X1) <= CURRENT_FIX_X &
+                                        lag(OBJECT_Y1) <= CURRENT_FIX_Y &
+                                        lag(OBJECT_X2) >= CURRENT_FIX_X &
+                                        lag(OBJECT_Y2) >= CURRENT_FIX_Y
+                                      , 1, 0))
+
 
 
 
@@ -121,6 +127,7 @@ if (settings$cluster_fixations){
       OBJECT_Y2 = first(OBJECT_Y2),
       confidence = first(confidence),
       hit = list(hit),
+      prev_hit = first(prev_hit),
       LAST_BUTTON_PRESSED = first(LAST_BUTTON_PRESSED),
     )
 }
@@ -151,21 +158,12 @@ if (settings$filter_inconsecutive_trial){
   MSC <- MSC %>%
     group_by(subjectnum) %>%
     filter(
-      is.na(lag(TRIAL_INDEX)) |  # Keep the first row in each group
-        TRIAL_INDEX == lag(TRIAL_INDEX) + 1  # Keep if consecutive
+        TRIAL_INDEX == lag(TRIAL_INDEX) + 1 |
+        TRIAL_INDEX == lead(TRIAL_INDEX) - 1
     ) %>%
-    ungroup()  # Remove grouping if needed
+    ungroup() 
 }
 
 if (settings$fliter_absent){
   MSC <- MSC %>% filter(condition == "present")
 }
-
-
-# ================================================================
-# MSC <<- mutate(MSC, prev_hit = ifelse(lag(OBJECT_X1) <= CURRENT_FIX_X &
-#                                         lag(OBJECT_Y1) <= CURRENT_FIX_Y &
-#                                         lag(OBJECT_X2) >= CURRENT_FIX_X &
-#                                         lag(OBJECT_Y2) >= CURRENT_FIX_Y
-#                                       , 1, 0))
-# 
