@@ -19,23 +19,23 @@ settings <- list(
   filter_inconsecutive_trial = TRUE,
   cluster_fixations = TRUE,
   features_to_remove = c("expected", "searcharray", "im_h", "im_w"),
-  fliter_absent = TRUE
+  fliter_absent = FALSE
 )
 
-# ****************** Helper Functions  ************************ 
-# ================================================================
+# ******************   ************************ 
+# ===============================Helper Functions=================================
 
 
 ## Data Preprocessing ----
-# ****************** Dataset Preprocessing   ************************ 
-# ================================================================
+# ******************    ************************ 
+# ================================Dataset Preprocessing================================
 
 # Conver N/A string to NA number for later type conversion
 MSC <<- mutate(MSC,
-             OBJECT_X1 = na_if(OBJECT_X1, "N\\A"),
-             OBJECT_Y1 = na_if(OBJECT_Y1, "N\\A"),
-             OBJECT_X2 = na_if(OBJECT_X2, "N\\A"),
-             OBJECT_Y2 = na_if(OBJECT_Y2, "N\\A"))
+               OBJECT_X1 = na_if(OBJECT_X1, "N\\A"),
+               OBJECT_Y1 = na_if(OBJECT_Y1, "N\\A"),
+               OBJECT_X2 = na_if(OBJECT_X2, "N\\A"),
+               OBJECT_Y2 = na_if(OBJECT_Y2, "N\\A"))
 
 # Convert featrues to be type int
 
@@ -51,9 +51,9 @@ MSC <<- MSC %>%
 
 # Convert fixation coordinats from relative to absolute
 MSC <<- MSC %>% mutate(OBJECT_X1 = OBJECT_X1 + (DISPLAY_W - im_w)/2,
-                      OBJECT_X2 = OBJECT_X2 + (DISPLAY_W - im_w)/2,
-                      OBJECT_Y1 = OBJECT_Y1 + (DISPLAY_H - im_h)/2,
-                      OBJECT_Y2 = OBJECT_Y2 + (DISPLAY_H - im_h)/2)
+                       OBJECT_X2 = OBJECT_X2 + (DISPLAY_W - im_w)/2,
+                       OBJECT_Y1 = OBJECT_Y1 + (DISPLAY_H - im_h)/2,
+                       OBJECT_Y2 = OBJECT_Y2 + (DISPLAY_H - im_h)/2)
 
 # MSC <<- MSC %>% mutate(CURRENT_FIX_X = CURRENT_FIX_X - (DISPLAY_W - im_w)/2, 
 #                        CURRENT_FIX_Y = CURRENT_FIX_Y - (DISPLAY_H - im_h)/2)
@@ -67,11 +67,11 @@ MSC <<- MSC %>%
   relocate(
     img_res, .after = im_w
   )
-  
+
 
 # Remove unnecessary features
 MSC <- MSC %>%
-   select(-all_of(settings$features_to_remove))
+  select(-all_of(settings$features_to_remove))
 
 
 # Sort by subjectnum, TRIAL_INDEX
@@ -79,31 +79,31 @@ MSC <- MSC %>%
   arrange(subjectnum, TRIAL_INDEX)
 
 
-# ================================================================
 
 #MSC%>% filter(subjectnum == 1 & TRIAL_INDEX < 100) %>% ggplot()+geom_point(aes(x=CURRENT_FIX_X, y=CURRENT_FIX_Y))+ylim(0,800) +xlim(0,1280)
 
 
-# ****************** Adding New Features  ************************ 
+# ******************   ************************ 
+# ===========================Adding New Features=====================================
 
 # Add hit - is fixation inside object
 MSC <<- mutate(MSC, hit = ifelse(OBJECT_X1 <= CURRENT_FIX_X & 
-                                       OBJECT_Y1 <= CURRENT_FIX_Y &
-                                       OBJECT_X2 >= CURRENT_FIX_X &
-                                       OBJECT_Y2 >= CURRENT_FIX_Y
-                                     , 1, 0))
-
-# ================================================================ 
+                                   OBJECT_Y1 <= CURRENT_FIX_Y &
+                                   OBJECT_X2 >= CURRENT_FIX_X &
+                                   OBJECT_Y2 >= CURRENT_FIX_Y
+                                 , 1, 0))
 
 
 
 
-# ****************** Clustering  ************************ 
+
+# ******************   ************************ 
+# ============================Clustering==================================== 
 
 
 # Cluster similar rows by subjectnum and trial_index. Merge unique data into a single array.
- if (settings$cluster_fixations){
-   MSC <<- MSC %>%
+if (settings$cluster_fixations){
+  MSC <<- MSC %>%
     group_by(subjectnum, TRIAL_INDEX) %>%
     summarize(
       catcue = first(catcue),
@@ -123,7 +123,7 @@ MSC <<- mutate(MSC, hit = ifelse(OBJECT_X1 <= CURRENT_FIX_X &
       hit = list(hit),
       LAST_BUTTON_PRESSED = first(LAST_BUTTON_PRESSED),
     )
- }
+}
 
 
 # Another way to do the previous
@@ -131,10 +131,10 @@ MSC <<- mutate(MSC, hit = ifelse(OBJECT_X1 <= CURRENT_FIX_X &
 #                                    id_cols = c(subjectnum:TRIAL_FIXATION_TOTAL,LAST_BUTTON_PRESSED),
 #                                    values_from = c(CURRENT_FIX_X:CURRENT_FIX_DURATION)
 #)
-# ================================================================
 
 
-# ****************** Filter Data  ************************ 
+# ******************   ************************ 
+# =========================Filter Data=======================================
 
 # Filter incorrect image detections
 if (settings$filter_bad_detections) {
@@ -160,5 +160,12 @@ if (settings$filter_inconsecutive_trial){
 if (settings$fliter_absent){
   MSC <- MSC %>% filter(condition == "present")
 }
-# ================================================================
 
+
+# ================================================================
+# MSC <<- mutate(MSC, prev_hit = ifelse(lag(OBJECT_X1) <= CURRENT_FIX_X &
+#                                         lag(OBJECT_Y1) <= CURRENT_FIX_Y &
+#                                         lag(OBJECT_X2) >= CURRENT_FIX_X &
+#                                         lag(OBJECT_Y2) >= CURRENT_FIX_Y
+#                                       , 1, 0))
+# 
