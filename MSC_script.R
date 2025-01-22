@@ -2,11 +2,14 @@ library(dplyr)
 library(ggplot2)
 library(readr)
 library(tidyr)
+library(tidyverse)
 rm(list = ls())
 
 # TODO:
-# Take prev_hit from the second fixation not the first
-# Expand the prev_hit to all fixations
+# Calculate the baseline probability of hitting a random rectangle with the average area of the detected boxes
+# == average(area of detected boxes)/average(area of images) 
+# area of detected box = (x2-x1) * (y2-y1)
+# area of image = im_w * im_h
 
 DISPLAY_W <- 1280
 DISPLAY_H <- 800
@@ -20,7 +23,8 @@ settings <- list(
   filter_inconsecutive_trial = TRUE,
   cluster_fixations = TRUE,
   features_to_remove = c("expected", "searcharray", "im_h", "im_w"),
-  fliter_absent = FALSE
+  fliter_absent = FALSE,
+  test_subject = TRUE
 )
 
 # ******************   ************************ 
@@ -81,24 +85,25 @@ MSC <- MSC %>%
 
 
 
-MSC_ORIGINAL%>% filter( CURRENT_FIX_INDEX == 2) %>% ggplot()+geom_point(aes(x=CURRENT_FIX_X, y=CURRENT_FIX_Y))+ylim(0,800) +xlim(0,1280)
+# MSC_ORIGINAL%>% filter( CURRENT_FIX_INDEX == 2) %>% ggplot()+geom_point(aes(x=CURRENT_FIX_X, y=CURRENT_FIX_Y))+ylim(0,800) +xlim(0,1280)
 
 
 # ******************   ************************ 
 # ===========================Adding New Features=====================================
 
 # Add hit - is fixation inside object
-MSC <<- mutate(MSC, hit = ifelse(OBJECT_X1 <= CURRENT_FIX_X & 
+MSC <<- mutate(MSC, hit = ifelse(OBJECT_X1 <= CURRENT_FIX_X &
                                    OBJECT_Y1 <= CURRENT_FIX_Y &
                                    OBJECT_X2 >= CURRENT_FIX_X &
                                    OBJECT_Y2 >= CURRENT_FIX_Y
                                  , 1, 0))
+# 
+# MSC <<- mutate(MSC, prev_hit = ifelse(lag(OBJECT_X1) <= CURRENT_FIX_X &
+#                                         lag(OBJECT_Y1) <= CURRENT_FIX_Y &
+#                                         lag(OBJECT_X2) >= CURRENT_FIX_X &
+#                                         lag(OBJECT_Y2) >= CURRENT_FIX_Y
+#                                       , 1, 0))
 
-MSC <<- mutate(MSC, prev_hit = ifelse(lag(OBJECT_X1) <= CURRENT_FIX_X &
-                                        lag(OBJECT_Y1) <= CURRENT_FIX_Y &
-                                        lag(OBJECT_X2) >= CURRENT_FIX_X &
-                                        lag(OBJECT_Y2) >= CURRENT_FIX_Y
-                                      , 1, 0))
 
 
 # ******************   ************************ 
@@ -127,10 +132,35 @@ if (settings$cluster_fixations){
       OBJECT_Y2 = first(OBJECT_Y2),
       confidence = first(confidence),
       hit = list(hit),
-      prev_hit = first(prev_hit),
+      # prev_hit = first(prev_hit),
       LAST_BUTTON_PRESSED = first(LAST_BUTTON_PRESSED),
     )
 }
+
+MSC <- MSC %>%
+  mutate(
+    PREV_OBJ_X1 = lag(OBJECT_X1, default = NA),
+    PREV_OBJ_Y1 = lag(OBJECT_Y1, default = NA),
+    PREV_OBJ_X2 = lag(OBJECT_X2, default = NA),
+    PREV_OBJ_Y2 = lag(OBJECT_Y2, default = NA),
+    )
+
+
+# Custom function
+custom_function <- function(FIX_X, FIX_Y, PREV_X1, PREV_Y1, PREV_X2, PREV_Y2) {
+  return(ifelse(PREV_X1 <= FIX_X & PREV_Y1 <= FIX_Y & PREV_X2 >= FIX_X & PREV_Y2 >= FIX_Y, 1, 0))
+}
+
+# Add new column using mapply
+MSC$prev_hit <- mapply(function(x1, x2, x3, x4, x5, x6) custom_function(x1, x2, x3, x4, x5, x6),
+                    MSC$CURRENT_FIX_X, MSC$CURRENT_FIX_Y, MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
+                    MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2, SIMPLIFY = FALSE)
+
+# MSC <- MSC %>%
+#   mutate(
+#     Y = map2(CURRENT_FIX_X, CURRENT_FIX_Y, ~ (PREV_OBJ_X1[cur_group_id()]))
+#     )
+
 
 
 # Another way to do the previous
@@ -164,27 +194,44 @@ if (settings$fliter_absent){
   MSC <- MSC %>% filter(condition == "present")
 }
 
+if (settings$test_subject){
+  MSC <- MSC %>% filter(subjectnum == 1)
+}
 
 
+
+
+MSC$prev_hit_2 <- sapply(MSC$prev_hit, function(x) x[2])
+
+(table(MSC$prev_hit_2))
+#prop.table(table(MSC$prev_hit_2))
+
+
+
+
+
+
+# ----------------------------------------------------------------------------------------
+# 
 # get_projection <- function(x, y, x1, y1, x2, y2) {
 #   # Case 1: x1 <= x <= x2
-#   if (x1 <= x && x <= x2) {
+#   if (x1 <= x & x <= x2) {
 #     if (y <= y1) {
 #       return(c(x, y1)) # Project to (x, y1)
 #     } else if (y >= y2) {
 #       return(c(x, y2)) # Project to (x, y2)
 #     }
 #   }
-#   
+# 
 #   # Case 2: y1 <= y <= y2
-#   if (y1 <= y && y <= y2) {
+#   if (y1 <= y & y <= y2) {
 #     if (x <= x1) {
 #       return(c(x1, y)) # Project to (x1, y)
 #     } else if (x >= x2) {
 #       return(c(x2, y)) # Project to (x2, y)
 #     }
 #   }
-#   
+# 
 #   # Case 3: x' and y' are the closest points
 #   # x' = argmin_i(|x - x_i|), y' = argmin_i(|y - y_i|)
 #   x_prime <- ifelse(abs(x - x1) < abs(x - x2), x1, x2)
@@ -210,11 +257,11 @@ if (settings$fliter_absent){
 #   mutate(
 #     PREV_ORTHOGONAL_DISTANCE = ifelse(
 #       !is.na(CURRENT_FIX_X) & !is.na(CURRENT_FIX_Y) &
-#         !is.na(OBJECT_X1) & !is.na(OBJECT_Y1) & !is.na(OBJECT_X2) & !is.na(OBJECT_Y2),
+#         !is.na(PREV_OBJ_X1) & !is.na(PREV_OBJ_Y1) & !is.na(PREV_OBJ_X2) & !is.na(PREV_OBJ_Y2),
 #       mapply(
 #         calc_orthogonal_distance,
 #         CURRENT_FIX_X, CURRENT_FIX_Y,
-#         OBJECT_X1, OBJECT_Y1, OBJECT_X2, OBJECT_Y2
+#         PREV_OBJ_X1, PREV_OBJ_Y1, PREV_OBJ_X2, PREV_OBJ_Y2
 #       ),
 #       NA  # Assign NA if any required column has NA
 #     )
