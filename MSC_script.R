@@ -213,56 +213,80 @@ MSC$prev_hit_2 <- sapply(MSC$prev_hit, function(x) x[2])
 
 # ----------------------------------------------------------------------------------------
 # 
-# get_projection <- function(x, y, x1, y1, x2, y2) {
-#   # Case 1: x1 <= x <= x2
-#   if (x1 <= x & x <= x2) {
-#     if (y <= y1) {
-#       return(c(x, y1)) # Project to (x, y1)
-#     } else if (y >= y2) {
-#       return(c(x, y2)) # Project to (x, y2)
-#     }
-#   }
-# 
-#   # Case 2: y1 <= y <= y2
-#   if (y1 <= y & y <= y2) {
-#     if (x <= x1) {
-#       return(c(x1, y)) # Project to (x1, y)
-#     } else if (x >= x2) {
-#       return(c(x2, y)) # Project to (x2, y)
-#     }
-#   }
-# 
-#   # Case 3: x' and y' are the closest points
-#   # x' = argmin_i(|x - x_i|), y' = argmin_i(|y - y_i|)
-#   x_prime <- ifelse(abs(x - x1) < abs(x - x2), x1, x2)
-#   y_prime <- ifelse(abs(y - y1) < abs(y - y2), y1, y2)
-#   return(c(x_prime, y_prime))
-# }
-# 
-# euc_l2 <- function(x1, y1, x2, y2) {
-#   # Calculate the Euclidean distance
-#   distance <- sqrt((x2 - x1)^2 + (y2 - y1)^2)
-#   return(distance)
-# }
-# 
-# calc_orthogonal_distance <- function(x, y, obj_x1, obj_y1, obj_x2, obj_y2) {
-#   projection <- get_projection(x, y, obj_x1, obj_y1, obj_x2, obj_y2)
-#   distance <- euc_l2(x, y, projection[1], projection[2])
-#   return(distance)
-# }
-# 
-# 
-# # Apply the function to the MSC dataset
-# MSC <- MSC %>%
-#   mutate(
-#     PREV_ORTHOGONAL_DISTANCE = ifelse(
-#       !is.na(CURRENT_FIX_X) & !is.na(CURRENT_FIX_Y) &
-#         !is.na(PREV_OBJ_X1) & !is.na(PREV_OBJ_Y1) & !is.na(PREV_OBJ_X2) & !is.na(PREV_OBJ_Y2),
-#       mapply(
-#         calc_orthogonal_distance,
-#         CURRENT_FIX_X, CURRENT_FIX_Y,
-#         PREV_OBJ_X1, PREV_OBJ_Y1, PREV_OBJ_X2, PREV_OBJ_Y2
-#       ),
-#       NA  # Assign NA if any required column has NA
-#     )
-#   )
+
+get_projection <- function(x, y, x1, y1, x2, y2) {
+  if(is.na(x) | is.na(y) |is.na(x1) |is.na(y1) |is.na(x2) |is.na(y2)){
+    return (NA)
+  }
+  if (x1 <= x & x <= x2 & y1 <= y & y <= y2 ){
+    return (c(x,y))
+  }
+  # Case 1: x1 <= x <= x2
+  if (x1 <= x & x <= x2) {
+    if (y <= y1) {
+      return(c(x, y1)) # Project to (x, y1)
+    } else if (y >= y2) {
+      return(c(x, y2)) # Project to (x, y2)
+    }
+  }
+
+  # Case 2: y1 <= y <= y2
+  if (y1 <= y & y <= y2) {
+    if (x <= x1) {
+      return(c(x1, y)) # Project to (x1, y)
+    } else if (x >= x2) {
+      return(c(x2, y)) # Project to (x2, y)
+    }
+  }
+
+  # Case 3: x' and y' are the closest points
+  # x' = argmin_i(|x - x_i|), y' = argmin_i(|y - y_i|)
+  x_prime <- ifelse(abs(x - x1) < abs(x - x2), x1, x2)
+  y_prime <- ifelse(abs(y - y1) < abs(y - y2), y1, y2)
+  return(c(x_prime, y_prime))
+}
+
+euc_l2 <- function(x1, y1, x2, y2) {
+  # Calculate the Euclidean distance
+  distance <- sqrt((x2 - x1)^2 + (y2 - y1)^2)
+  return(distance)
+}
+
+calc_orthogonal_distance <- function(x, y, obj_x1, obj_y1, obj_x2, obj_y2) {
+  projection <- get_projection(x, y, obj_x1, obj_y1, obj_x2, obj_y2)
+  distance <- euc_l2(x, y, projection[1], projection[2])
+  return(distance)
+}
+
+# Accepts lists X,Y and scalars x1,y1,x2,y2 and returns a new list by applying calc_orthogonal_distance(x, y, x1, y1, x2, y2)
+calc_orthogonal_distances <- function(X, Y, x1, y1, x2, y2) {
+  # Check if lengths of X and Y are the same
+  if (length(X) != length(Y)) {
+    stop("X and Y must have the same length")
+  }
+  
+  # Initialize an empty vector to store results
+  distances <- numeric(length(X))
+  
+  # Iterate over the elements of X and Y
+  for (i in seq_along(X)) {
+    distances[i] <- calc_orthogonal_distance(X[i], Y[i], x1, y1, x2, y2)
+  }
+  
+  # Return the list of distances
+  return(distances)
+}
+
+# Apply the function to the MSC dataset
+MSC <- MSC %>%
+  mutate(
+    PREV_ORTHOGONAL_DISTANCE = ifelse(
+        !is.na(PREV_OBJ_X1) & !is.na(PREV_OBJ_Y1) & !is.na(PREV_OBJ_X2) & !is.na(PREV_OBJ_Y2),
+      mapply(
+        calc_orthogonal_distances,
+        CURRENT_FIX_X, CURRENT_FIX_Y,
+        PREV_OBJ_X1, PREV_OBJ_Y1, PREV_OBJ_X2, PREV_OBJ_Y2
+      ),
+      NA  # Assign NA if any required column has NA
+    )
+  )
