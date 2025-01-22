@@ -22,9 +22,9 @@ settings <- list(
   filter_bad_detections = TRUE,
   filter_inconsecutive_trial = TRUE,
   cluster_fixations = TRUE,
-  features_to_remove = c("expected", "searcharray", "im_h", "im_w"),
+  features_to_remove = c("expected", "searcharray"),
   fliter_absent = FALSE,
-  test_subject = TRUE
+  test_subject = FALSE
 )
 
 # ******************   ************************ 
@@ -64,7 +64,7 @@ MSC <<- MSC %>% mutate(OBJECT_X1 = OBJECT_X1 + (DISPLAY_W - im_w)/2,
 #                        CURRENT_FIX_Y = CURRENT_FIX_Y - (DISPLAY_H - im_h)/2)
 
 
-# merge  (im_h, im_w) -> img_res 
+# merge  (im_h, im_w) -> img_res
 MSC <<- MSC %>%
   mutate(
     img_res = paste(im_w, im_h, sep = ",")
@@ -97,6 +97,9 @@ MSC <<- mutate(MSC, hit = ifelse(OBJECT_X1 <= CURRENT_FIX_X &
                                    OBJECT_X2 >= CURRENT_FIX_X &
                                    OBJECT_Y2 >= CURRENT_FIX_Y
                                  , 1, 0))
+
+MSC <<- mutate(MSC, p_hit = ((OBJECT_X2-OBJECT_X1) * (OBJECT_Y2-OBJECT_Y1))/(im_w * im_h))
+# 
 # 
 # MSC <<- mutate(MSC, prev_hit = ifelse(lag(OBJECT_X1) <= CURRENT_FIX_X &
 #                                         lag(OBJECT_Y1) <= CURRENT_FIX_Y &
@@ -106,7 +109,6 @@ MSC <<- mutate(MSC, hit = ifelse(OBJECT_X1 <= CURRENT_FIX_X &
 
 
 
-# ******************   ************************ 
 # ============================Clustering==================================== 
 
 
@@ -132,10 +134,15 @@ if (settings$cluster_fixations){
       OBJECT_Y2 = first(OBJECT_Y2),
       confidence = first(confidence),
       hit = list(hit),
+      p_hit = first(p_hit),
       # prev_hit = first(prev_hit),
       LAST_BUTTON_PRESSED = first(LAST_BUTTON_PRESSED),
     )
 }
+
+
+
+# ============================More Features==================================== 
 
 MSC <- MSC %>%
   mutate(
@@ -144,22 +151,21 @@ MSC <- MSC %>%
     PREV_OBJ_X2 = lag(OBJECT_X2, default = NA),
     PREV_OBJ_Y2 = lag(OBJECT_Y2, default = NA),
     )
+MSC <- MSC %>%
+  mutate(
+    p_prev_hit = lag(p_hit, default = NA)
+    )
 
 
 # Custom function
-custom_function <- function(FIX_X, FIX_Y, PREV_X1, PREV_Y1, PREV_X2, PREV_Y2) {
+calc_hit <- function(FIX_X, FIX_Y, PREV_X1, PREV_Y1, PREV_X2, PREV_Y2) {
   return(ifelse(PREV_X1 <= FIX_X & PREV_Y1 <= FIX_Y & PREV_X2 >= FIX_X & PREV_Y2 >= FIX_Y, 1, 0))
 }
 
-# Add new column using mapply
-MSC$prev_hit <- mapply(function(x1, x2, x3, x4, x5, x6) custom_function(x1, x2, x3, x4, x5, x6),
+# prev_hit
+MSC$prev_hit <- mapply(function(x1, x2, x3, x4, x5, x6) calc_hit(x1, x2, x3, x4, x5, x6),
                     MSC$CURRENT_FIX_X, MSC$CURRENT_FIX_Y, MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
                     MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2, SIMPLIFY = FALSE)
-
-# MSC <- MSC %>%
-#   mutate(
-#     Y = map2(CURRENT_FIX_X, CURRENT_FIX_Y, ~ (PREV_OBJ_X1[cur_group_id()]))
-#     )
 
 
 
@@ -169,7 +175,6 @@ MSC$prev_hit <- mapply(function(x1, x2, x3, x4, x5, x6) custom_function(x1, x2, 
 #                                    values_from = c(CURRENT_FIX_X:CURRENT_FIX_DURATION)
 #)
 
-# ******************   ************************ 
 # =========================Filter Data=======================================
 # Filter incorrect image detections
 if (settings$filter_bad_detections) {
@@ -211,8 +216,7 @@ MSC$prev_hit_2 <- sapply(MSC$prev_hit, function(x) x[2])
 
 
 
-# ----------------------------------------------------------------------------------------
-# 
+# ============================Orthogonal Projection==================================== 
 
 get_projection <- function(x, y, x1, y1, x2, y2) {
   if(is.na(x) | is.na(y) |is.na(x1) |is.na(y1) |is.na(x2) |is.na(y2)){
