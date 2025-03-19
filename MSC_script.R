@@ -14,7 +14,7 @@ rm(list = ls())
 DISPLAY_W <- 1280
 DISPLAY_H <- 800
 
-MSC_PATH = "C:/Users/averr/OneDrive/Desktop/TAU/Year 4/Psych Workshop/Scripts/1. Object Detection/MSC_DS_PROCESSED_DETECTINOS_25_12_2024.csv"
+MSC_PATH = "C:/Users/danie/OneDrive/Documents/אוניברסיטה/דוקטורט/PhD/Projects/MCS_dataset - Tamer/MCS_dataset/MSC_DS_PROCESSED_DETECTINOS_25_12_2024.csv"
 MSC <- read_csv(MSC_PATH)
 MSC_ORIGINAL <- MSC
 # Define script settings
@@ -23,8 +23,8 @@ settings <- list(
   filter_inconsecutive_trial = TRUE,
   cluster_fixations = TRUE,
   features_to_remove = c("expected", "searcharray"),
-  fliter_absent = FALSE,
-  test_subject = FALSE
+  fliter_prev_absent = TRUE,
+  test_subject = TRUE
 )
 
 # ******************   ************************ 
@@ -98,7 +98,9 @@ MSC <<- mutate(MSC, hit = ifelse(OBJECT_X1 <= CURRENT_FIX_X &
                                    OBJECT_Y2 >= CURRENT_FIX_Y
                                  , 1, 0))
 
-MSC <<- mutate(MSC, p_hit = ((OBJECT_X2-OBJECT_X1) * (OBJECT_Y2-OBJECT_Y1))/(im_w * im_h))
+MSC <<- mutate(MSC, p_hit = ((OBJECT_X2-OBJECT_X1) * (OBJECT_Y2-OBJECT_Y1))/(im_w * im_h)
+               )
+
 # 
 # 
 # MSC <<- mutate(MSC, prev_hit = ifelse(lag(OBJECT_X1) <= CURRENT_FIX_X &
@@ -120,6 +122,8 @@ if (settings$cluster_fixations){
       catcue = first(catcue),
       condition = first(condition),
       img_res = first(img_res),
+      im_w = first(im_w),
+      im_h = first(im_h),
       img_name = first(img_name),
       TRIAL_FIXATION_TOTAL = first(TRIAL_FIXATION_TOTAL),
       FIRST_FIX_X = first(CURRENT_FIX_X),
@@ -153,7 +157,9 @@ MSC <- MSC %>%
     )
 MSC <- MSC %>%
   mutate(
-    p_prev_hit = lag(p_hit, default = NA)
+    #p_prev_hit1 = lag(p_hit, default = NA),
+    prev_p_hit = ((PREV_OBJ_X2-PREV_OBJ_X1) * (PREV_OBJ_Y2-PREV_OBJ_Y1))/(im_w * im_h),
+    prev_condition = lag(condition, default = NA)
     )
 
 
@@ -195,8 +201,8 @@ if (settings$filter_inconsecutive_trial){
 
 
 
-if (settings$fliter_absent){
-  MSC <- MSC %>% filter(condition == "present")
+if (settings$fliter_prev_absent){
+  MSC <- MSC %>% filter(prev_condition == "present")
 }
 
 if (settings$test_subject){
@@ -204,16 +210,33 @@ if (settings$test_subject){
 }
 
 
+MSC = MSC%>%mutate(
+  prev_hit_1 = sapply(prev_hit, function(x) x[1]),
+  prev_hit_2 = sapply(prev_hit, function(x) x[2]),
+  prev_hit_3 = sapply(prev_hit, function(x) x[3]),
+  prev_hit_4 = sapply(prev_hit, function(x) x[4]),
+  prev_hit_5 = sapply(prev_hit, function(x) x[5]),
+  prev_hit_6 = sapply(prev_hit, function(x) x[6]),
+  prev_hit_7 = sapply(prev_hit, function(x) x[7]),
+  prev_hit_8 = sapply(prev_hit, function(x) x[8])
+)
+
+##
+table(MSC$condition,MSC$prev_condition)
 
 
-MSC$prev_hit_2 <- sapply(MSC$prev_hit, function(x) x[2])
-
-(table(MSC$prev_hit_2))
+prop.table(table(MSC$prev_hit_1))
+prop.table(table(MSC$prev_hit_2))
+prop.table(table(MSC$prev_hit_3))
+prop.table(table(MSC$prev_hit_4))
+prop.table(table(MSC$prev_hit_5))
+prop.table(table(MSC$prev_hit_6))
+prop.table(table(MSC$prev_hit_7))
+prop.table(table(MSC$prev_hit_8))
 #prop.table(table(MSC$prev_hit_2))
 
-
-
-
+## Some indiciation of an effect
+MSC%>%summarize(mean(prev_p_hit, na.rm = TRUE))
 
 
 # ============================Orthogonal Projection==================================== 
@@ -294,3 +317,25 @@ MSC <- MSC %>%
       NA  # Assign NA if any required column has NA
     )
   )
+
+##needs fixing
+MSC = MSC%>%mutate(
+  PREV_ORTHOGONAL_DISTANCE_1 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) unlist(x[1])),
+  PREV_ORTHOGONAL_DISTANCE_2 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[2]),
+  PREV_ORTHOGONAL_DISTANCE_3 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[3]),
+  PREV_ORTHOGONAL_DISTANCE_4 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[4]),
+  PREV_ORTHOGONAL_DISTANCE_5 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[5]),
+  PREV_ORTHOGONAL_DISTANCE_6 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[6]),
+  PREV_ORTHOGONAL_DISTANCE_7 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[7]),
+  PREV_ORTHOGONAL_DISTANCE_8 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[8])
+)
+
+MSC%>%summarize(mean(PREV_ORTHOGONAL_DISTANCE_1, na.rm = TRUE))
+
+## what is the baseline?
+## randomly generate dots (based on the previous target window (fixed) and the size of the current image (fixed))
+## calculate the distance between the dots and the (previous target) rectangle using your function 
+## Average the distance for each picture
+
+#monte carlo simulations/ agent based simulations
+
