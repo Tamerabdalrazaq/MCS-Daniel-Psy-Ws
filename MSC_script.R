@@ -14,6 +14,7 @@ rm(list = ls())
 DISPLAY_W <- 1280
 DISPLAY_H <- 800
 RANDOM_POINTS_COUNT <- 1000
+RELEVAN_FIX <- 3
 
 MSC_PATH = "C:/Users/averr/OneDrive/Desktop/TAU/Year 4/Semestar A/Psych Workshop/Scripts/1. Object Detection/MSC_DS_PROCESSED_DETECTINOS_25_12_2024.csv"
 MSC <- read_csv(MSC_PATH)
@@ -28,12 +29,6 @@ settings <- list(
   test_subject = TRUE
 )
 
-# ******************   ************************ 
-# ===============================Helper Functions=================================
-
-
-## Data Preprocessing ----
-# ******************    ************************ 
 # ================================Dataset Preprocessing================================
 
 # Conver N/A string to NA number for later type conversion
@@ -89,7 +84,6 @@ MSC <- MSC %>%
 # MSC_ORIGINAL%>% filter( CURRENT_FIX_INDEX == 2) %>% ggplot()+geom_point(aes(x=CURRENT_FIX_X, y=CURRENT_FIX_Y))+ylim(0,800) +xlim(0,1280)
 
 
-# ******************   ************************ 
 # ===========================Adding New Features=====================================
 
 # Add hit - is fixation inside object
@@ -182,6 +176,21 @@ MSC$prev_hit <- mapply(function(x1, x2, x3, x4, x5, x6) calc_hit(x1, x2, x3, x4,
 #                                    values_from = c(CURRENT_FIX_X:CURRENT_FIX_DURATION)
 #)
 
+
+# # Average position by fixation number
+# AVG_FIXATION_DF <- MSC_ORIGINAL %>%
+#   group_by(subjectnum, CURRENT_FIX_INDEX) %>% 
+#   summarise(
+#     mean_CURRENT_FIX_X = mean(CURRENT_FIX_X),
+#     mean_CURRENT_FIX_Y = mean(CURRENT_FIX_Y),
+#     .groups = 'drop') %>%
+#   pivot_wider(
+#     names_from = CURRENT_FIX_INDEX,
+#     values_from = c(mean_CURRENT_FIX_X, mean_CURRENT_FIX_Y),
+#     names_glue = "{.value}_{CURRENT_FIX_INDEX}"
+#   )
+
+
 # =========================Filter Data=======================================
 # Filter incorrect image detections
 if (settings$filter_bad_detections) {
@@ -201,6 +210,22 @@ if (settings$filter_inconsecutive_trial){
 }
 
 
+### Prev absent DF for OG baseline
+
+PREV_ABSENT_DF <- MSC %>% 
+  filter(prev_condition == "absent")
+
+PREV_ABSENT_DF$THIRD_FIX_X <- sapply(PREV_ABSENT_DF$CURRENT_FIX_X, function(x) x[RELEVAN_FIX])
+PREV_ABSENT_DF$THIRD_FIX_Y <- sapply(PREV_ABSENT_DF$CURRENT_FIX_Y, function(x) x[RELEVAN_FIX])
+
+# Group by subjectnum and compute the mean of THIRD_FIX_X
+avg_third_fix_df <- PREV_ABSENT_DF %>%
+  group_by(subjectnum) %>%
+  summarise(avg_third_fix_x = mean(THIRD_FIX_X, na.rm = TRUE), 
+            avg_third_fix_y = mean(THIRD_FIX_Y, na.rm = TRUE), ) %>%
+  ungroup()
+
+
 
 if (settings$fliter_prev_absent){
   MSC <- MSC %>% filter(prev_condition == "present")
@@ -208,6 +233,7 @@ if (settings$fliter_prev_absent){
 
 if (settings$test_subject){
   MSC <- MSC %>% filter(subjectnum == 1)
+  # AVG_FIXATION_DF <- AVG_FIXATION_DF %>% filter(subjectnum == 1)
 }
 
 
@@ -291,8 +317,12 @@ MSC <- MSC %>%
     
   )
 
+# ============================Calculating Different Baselines==================================== 
 
-# Calculate the average OG distance from the * previous * detection
+
+
+# Calculate the average OG distance of a random point
+# from the * previous * detection
 
 # The point is inside the image 
 calculate_single_mean_distance  <- function(im_w, im_h, obj_x1, obj_y1, obj_x2, obj_y2) {
@@ -311,6 +341,51 @@ MSC$MEAN_OG_DISTANCE <- mapply(calculate_single_mean_distance,
                                MSC$im_w, MSC$im_h,
                                MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
                                MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2)
+
+
+# Calculate the OG distance between center and  the * previous * detection
+MSC$CENTER_OG_DISTANCE <- mapply(calc_orthogonal_distance,
+                               DISPLAY_W/2, DISPLAY_H/2,
+                               MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
+                               MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2)
+
+
+
+# Calculate the OG distance between a specific fixation mean and  the * previous * detection
+
+
+# MSC$AVG_FIX_OG_DISTANCE <- mapply(
+#   function(subj, x1, y1, x2, y2) {
+#     # Find the row in AVG_FIXATION_DF where subjectnum == current subject & CURRENT_FIX_INDEX == 3
+#     idx <- which(AVG_FIXATION_DF$subjectnum == subj)
+#     if (length(idx) == 0) return(NA)
+# 
+#     fix_x <- AVG_FIXATION_DF$mean_CURRENT_FIX_X_3[idx]
+#     fix_y <- AVG_FIXATION_DF$mean_CURRENT_FIX_Y_3[idx]
+# 
+#     calc_orthogonal_distance(fix_x, fix_y, x1, y1, x2, y2)
+#   },
+#   MSC$subjectnum,
+#   MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
+#   MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
+# )
+
+
+# For previous absent
+MSC$AVG_FIX_OG_DISTANCE <- mapply(
+  function(subj, x1, y1, x2, y2) {
+    idx <- which(avg_third_fix_df$subjectnum == subj)
+    if (length(idx) == 0) return(NA)
+
+    fix_x <- avg_third_fix_df$avg_third_fix_x[idx]
+    fix_y <- avg_third_fix_df$avg_third_fix_y[idx]
+
+    calc_orthogonal_distance(fix_x, fix_y, x1, y1, x2, y2)
+  },
+  MSC$subjectnum,
+  MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
+  MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
+)
 
 
 # ============================Analysis==================================== 
@@ -368,11 +443,24 @@ mean(MSC$PREV_ORTHOGONAL_DISTANCE_7, na.rm = TRUE)
 mean(MSC$PREV_ORTHOGONAL_DISTANCE_8, na.rm = TRUE)
 
 mean(MSC$MEAN_OG_DISTANCE, na.rm = TRUE)
+mean(MSC$CENTER_OG_DISTANCE, na.rm = TRUE)
+mean(MSC$AVG_FIX_OG_DISTANCE, na.rm = TRUE)
 
 
 ## what is the baseline?
 ## randomly generate dots (based on the previous target window (fixed) and the size of the current image (fixed))
 ## calculate the distance between the dots and the (previous target) rectangle using your function 
 ## Average the distance for each picture
-
 #monte carlo simulations/ agent based simulations
+
+# Other baseline ideas:
+# 1) Maybe we average the 3rd fixation of the relevant subject, denote by F'
+# The baseline is the OG distance between F' and the object. Here we can consider trials with
+# object absent previous trial  
+
+# 2) Need to consider the tendancy to look at the center
+
+
+
+# write.csv(MSC[, c("PREV_ORTHOGONAL_DISTANCE_3", "CENTER_OG_DISTANCE", "MEAN_OG_DISTANCE", "AVG_FIX_OG_DISTANCE")], file = "MUTATED_MSC.csv")
+
