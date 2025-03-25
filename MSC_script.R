@@ -13,8 +13,9 @@ rm(list = ls())
 
 DISPLAY_W <- 1280
 DISPLAY_H <- 800
+RANDOM_POINTS_COUNT <- 1000
 
-MSC_PATH = "C:/Users/danie/OneDrive/Documents/אוניברסיטה/דוקטורט/PhD/Projects/MCS_dataset - Tamer/MCS_dataset/MSC_DS_PROCESSED_DETECTINOS_25_12_2024.csv"
+MSC_PATH = "C:/Users/averr/OneDrive/Desktop/TAU/Year 4/Semestar A/Psych Workshop/Scripts/1. Object Detection/MSC_DS_PROCESSED_DETECTINOS_25_12_2024.csv"
 MSC <- read_csv(MSC_PATH)
 MSC_ORIGINAL <- MSC
 # Define script settings
@@ -99,7 +100,7 @@ MSC <<- mutate(MSC, hit = ifelse(OBJECT_X1 <= CURRENT_FIX_X &
                                  , 1, 0))
 
 MSC <<- mutate(MSC, p_hit = ((OBJECT_X2-OBJECT_X1) * (OBJECT_Y2-OBJECT_Y1))/(im_w * im_h)
-               )
+)
 
 # 
 # 
@@ -154,13 +155,13 @@ MSC <- MSC %>%
     PREV_OBJ_Y1 = lag(OBJECT_Y1, default = NA),
     PREV_OBJ_X2 = lag(OBJECT_X2, default = NA),
     PREV_OBJ_Y2 = lag(OBJECT_Y2, default = NA),
-    )
+  )
 MSC <- MSC %>%
   mutate(
     #p_prev_hit1 = lag(p_hit, default = NA),
-    prev_p_hit = ((PREV_OBJ_X2-PREV_OBJ_X1) * (PREV_OBJ_Y2-PREV_OBJ_Y1))/(im_w * im_h),
+    p_prev_obj_hit = ((PREV_OBJ_X2-PREV_OBJ_X1) * (PREV_OBJ_Y2-PREV_OBJ_Y1))/(im_w * im_h),
     prev_condition = lag(condition, default = NA)
-    )
+  )
 
 
 # Custom function
@@ -170,8 +171,8 @@ calc_hit <- function(FIX_X, FIX_Y, PREV_X1, PREV_Y1, PREV_X2, PREV_Y2) {
 
 # prev_hit
 MSC$prev_hit <- mapply(function(x1, x2, x3, x4, x5, x6) calc_hit(x1, x2, x3, x4, x5, x6),
-                    MSC$CURRENT_FIX_X, MSC$CURRENT_FIX_Y, MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
-                    MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2, SIMPLIFY = FALSE)
+                       MSC$CURRENT_FIX_X, MSC$CURRENT_FIX_Y, MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
+                       MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2, SIMPLIFY = FALSE)
 
 
 
@@ -195,7 +196,7 @@ if (settings$filter_bad_detections) {
 if (settings$filter_inconsecutive_trial){
   MSC <- MSC %>%
     filter(
-        TRIAL_INDEX == lag(TRIAL_INDEX) + 1
+      TRIAL_INDEX == lag(TRIAL_INDEX) + 1
     )
 }
 
@@ -208,35 +209,6 @@ if (settings$fliter_prev_absent){
 if (settings$test_subject){
   MSC <- MSC %>% filter(subjectnum == 1)
 }
-
-
-MSC = MSC%>%mutate(
-  prev_hit_1 = sapply(prev_hit, function(x) x[1]),
-  prev_hit_2 = sapply(prev_hit, function(x) x[2]),
-  prev_hit_3 = sapply(prev_hit, function(x) x[3]),
-  prev_hit_4 = sapply(prev_hit, function(x) x[4]),
-  prev_hit_5 = sapply(prev_hit, function(x) x[5]),
-  prev_hit_6 = sapply(prev_hit, function(x) x[6]),
-  prev_hit_7 = sapply(prev_hit, function(x) x[7]),
-  prev_hit_8 = sapply(prev_hit, function(x) x[8])
-)
-
-##
-table(MSC$condition,MSC$prev_condition)
-
-
-prop.table(table(MSC$prev_hit_1))
-prop.table(table(MSC$prev_hit_2))
-prop.table(table(MSC$prev_hit_3))
-prop.table(table(MSC$prev_hit_4))
-prop.table(table(MSC$prev_hit_5))
-prop.table(table(MSC$prev_hit_6))
-prop.table(table(MSC$prev_hit_7))
-prop.table(table(MSC$prev_hit_8))
-#prop.table(table(MSC$prev_hit_2))
-
-## Some indiciation of an effect
-MSC%>%summarize(mean(prev_p_hit, na.rm = TRUE))
 
 
 # ============================Orthogonal Projection==================================== 
@@ -256,7 +228,7 @@ get_projection <- function(x, y, x1, y1, x2, y2) {
       return(c(x, y2)) # Project to (x, y2)
     }
   }
-
+  
   # Case 2: y1 <= y <= y2
   if (y1 <= y & y <= y2) {
     if (x <= x1) {
@@ -265,7 +237,7 @@ get_projection <- function(x, y, x1, y1, x2, y2) {
       return(c(x2, y)) # Project to (x2, y)
     }
   }
-
+  
   # Case 3: x' and y' are the closest points
   # x' = argmin_i(|x - x_i|), y' = argmin_i(|y - y_i|)
   x_prime <- ifelse(abs(x - x1) < abs(x - x2), x1, x2)
@@ -308,7 +280,7 @@ calc_orthogonal_distances <- function(X, Y, x1, y1, x2, y2) {
 MSC <- MSC %>%
   mutate(
     PREV_ORTHOGONAL_DISTANCE = ifelse(
-        !is.na(PREV_OBJ_X1) & !is.na(PREV_OBJ_Y1) & !is.na(PREV_OBJ_X2) & !is.na(PREV_OBJ_Y2),
+      !is.na(PREV_OBJ_X1) & !is.na(PREV_OBJ_Y1) & !is.na(PREV_OBJ_X2) & !is.na(PREV_OBJ_Y2),
       mapply(
         calc_orthogonal_distances,
         CURRENT_FIX_X, CURRENT_FIX_Y,
@@ -316,11 +288,67 @@ MSC <- MSC %>%
       ),
       NA  # Assign NA if any required column has NA
     )
+    
   )
 
-##needs fixing
+
+# Calculate the average OG distance from the * previous * detection
+
+# The point is inside the image 
+calculate_single_mean_distance  <- function(im_w, im_h, obj_x1, obj_y1, obj_x2, obj_y2) {
+  # Calculate the Euclidean distance
+  x_vector <- runif(RANDOM_POINTS_COUNT, min = (DISPLAY_W - im_w)/2, (DISPLAY_W - im_w)/2 + im_w)
+  y_vector <- runif(RANDOM_POINTS_COUNT, min = (DISPLAY_H - im_h)/2, (DISPLAY_H - im_h)/2 + im_h)
+  distances <- mapply(calc_orthogonal_distance,
+                     x_vector, y_vector,
+                     MoreArgs = list(obj_x1 = obj_x1, obj_y1 = obj_y1,
+                                     obj_x2 = obj_x2, obj_y2 = obj_y2))
+  
+  return(mean(distances))
+}
+
+MSC$MEAN_OG_DISTANCE <- mapply(calculate_single_mean_distance,
+                               MSC$im_w, MSC$im_h,
+                               MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
+                               MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2)
+
+
+# ============================Analysis==================================== 
+
+# Probability analysis
+
 MSC = MSC%>%mutate(
-  PREV_ORTHOGONAL_DISTANCE_1 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) unlist(x[1])),
+  prev_hit_1 = sapply(prev_hit, function(x) x[1]),
+  prev_hit_2 = sapply(prev_hit, function(x) x[2]),
+  prev_hit_3 = sapply(prev_hit, function(x) x[3]),
+  prev_hit_4 = sapply(prev_hit, function(x) x[4]),
+  prev_hit_5 = sapply(prev_hit, function(x) x[5]),
+  prev_hit_6 = sapply(prev_hit, function(x) x[6]),
+  prev_hit_7 = sapply(prev_hit, function(x) x[7]),
+  prev_hit_8 = sapply(prev_hit, function(x) x[8])
+)
+
+##
+table(MSC$condition,MSC$prev_condition)
+
+
+prop.table(table(MSC$prev_hit_1))
+prop.table(table(MSC$prev_hit_2))
+prop.table(table(MSC$prev_hit_3))
+prop.table(table(MSC$prev_hit_4))
+prop.table(table(MSC$prev_hit_5))
+prop.table(table(MSC$prev_hit_6))
+prop.table(table(MSC$prev_hit_7))
+prop.table(table(MSC$prev_hit_8))
+
+## Some indiciation of an effect
+MSC%>%summarize(mean(p_prev_obj_hit, na.rm = TRUE))
+
+
+# OG Distance Analysis
+
+MSC = MSC%>%mutate(
+  PREV_ORTHOGONAL_DISTANCE_1 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[1]),
   PREV_ORTHOGONAL_DISTANCE_2 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[2]),
   PREV_ORTHOGONAL_DISTANCE_3 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[3]),
   PREV_ORTHOGONAL_DISTANCE_4 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[4]),
@@ -330,7 +358,17 @@ MSC = MSC%>%mutate(
   PREV_ORTHOGONAL_DISTANCE_8 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[8])
 )
 
-MSC%>%summarize(mean(PREV_ORTHOGONAL_DISTANCE_1, na.rm = TRUE))
+mean(MSC$PREV_ORTHOGONAL_DISTANCE_1, na.rm = TRUE)
+mean(MSC$PREV_ORTHOGONAL_DISTANCE_2, na.rm = TRUE)
+mean(MSC$PREV_ORTHOGONAL_DISTANCE_3, na.rm = TRUE)
+mean(MSC$PREV_ORTHOGONAL_DISTANCE_4, na.rm = TRUE)
+mean(MSC$PREV_ORTHOGONAL_DISTANCE_5, na.rm = TRUE)
+mean(MSC$PREV_ORTHOGONAL_DISTANCE_6, na.rm = TRUE)
+mean(MSC$PREV_ORTHOGONAL_DISTANCE_7, na.rm = TRUE)
+mean(MSC$PREV_ORTHOGONAL_DISTANCE_8, na.rm = TRUE)
+
+mean(MSC$MEAN_OG_DISTANCE, na.rm = TRUE)
+
 
 ## what is the baseline?
 ## randomly generate dots (based on the previous target window (fixed) and the size of the current image (fixed))
@@ -338,4 +376,3 @@ MSC%>%summarize(mean(PREV_ORTHOGONAL_DISTANCE_1, na.rm = TRUE))
 ## Average the distance for each picture
 
 #monte carlo simulations/ agent based simulations
-
