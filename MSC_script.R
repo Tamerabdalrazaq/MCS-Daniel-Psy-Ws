@@ -5,20 +5,15 @@ library(tidyr)
 library(tidyverse)
 rm(list = ls())
 
-# TODO:
-# Calculate the baseline probability of hitting a random rectangle with the average area of the detected boxes
-# == average(area of detected boxes)/average(area of images) 
-# area of detected box = (x2-x1) * (y2-y1)
-# area of image = im_w * im_h
-
 DISPLAY_W <- 1280
 DISPLAY_H <- 800
 RANDOM_POINTS_COUNT <- 1000
-RELEVAN_FIX <- 3
 
 MSC_PATH = "C:/Users/averr/OneDrive/Desktop/TAU/Year 4/Semestar A/Psych Workshop/Scripts/1. Object Detection/MSC_DS_PROCESSED_DETECTINOS_25_12_2024.csv"
 MSC <- read_csv(MSC_PATH)
 MSC_ORIGINAL <- MSC
+
+
 # Define script settings
 settings <- list(
   filter_bad_detections = TRUE,
@@ -26,7 +21,7 @@ settings <- list(
   cluster_fixations = TRUE,
   features_to_remove = c("expected", "searcharray"),
   fliter_prev_absent = TRUE,
-  test_subject = TRUE
+  test_subject = FALSE
 )
 
 # ================================Dataset Preprocessing================================
@@ -80,10 +75,6 @@ MSC <- MSC %>%
   arrange(subjectnum, TRIAL_INDEX)
 
 
-
-# MSC_ORIGINAL%>% filter( CURRENT_FIX_INDEX == 2) %>% ggplot()+geom_point(aes(x=CURRENT_FIX_X, y=CURRENT_FIX_Y))+ylim(0,800) +xlim(0,1280)
-
-
 # ===========================Adding New Features=====================================
 
 # Add hit - is fixation inside object
@@ -95,16 +86,6 @@ MSC <<- mutate(MSC, hit = ifelse(OBJECT_X1 <= CURRENT_FIX_X &
 
 MSC <<- mutate(MSC, p_hit = ((OBJECT_X2-OBJECT_X1) * (OBJECT_Y2-OBJECT_Y1))/(im_w * im_h)
 )
-
-# 
-# 
-# MSC <<- mutate(MSC, prev_hit = ifelse(lag(OBJECT_X1) <= CURRENT_FIX_X &
-#                                         lag(OBJECT_Y1) <= CURRENT_FIX_Y &
-#                                         lag(OBJECT_X2) >= CURRENT_FIX_X &
-#                                         lag(OBJECT_Y2) >= CURRENT_FIX_Y
-#                                       , 1, 0))
-
-
 
 # ============================Clustering==================================== 
 
@@ -169,28 +150,6 @@ MSC$prev_hit <- mapply(function(x1, x2, x3, x4, x5, x6) calc_hit(x1, x2, x3, x4,
                        MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2, SIMPLIFY = FALSE)
 
 
-
-# Another way to do the previous
-#pivoted_MC = MSC_ORIGINAL %>%pivot_wider(names_from = CURRENT_FIX_INDEX,
-#                                    id_cols = c(subjectnum:TRIAL_FIXATION_TOTAL,LAST_BUTTON_PRESSED),
-#                                    values_from = c(CURRENT_FIX_X:CURRENT_FIX_DURATION)
-#)
-
-
-# # Average position by fixation number
-# AVG_FIXATION_DF <- MSC_ORIGINAL %>%
-#   group_by(subjectnum, CURRENT_FIX_INDEX) %>% 
-#   summarise(
-#     mean_CURRENT_FIX_X = mean(CURRENT_FIX_X),
-#     mean_CURRENT_FIX_Y = mean(CURRENT_FIX_Y),
-#     .groups = 'drop') %>%
-#   pivot_wider(
-#     names_from = CURRENT_FIX_INDEX,
-#     values_from = c(mean_CURRENT_FIX_X, mean_CURRENT_FIX_Y),
-#     names_glue = "{.value}_{CURRENT_FIX_INDEX}"
-#   )
-
-
 # =========================Filter Data=======================================
 # Filter incorrect image detections
 if (settings$filter_bad_detections) {
@@ -212,19 +171,24 @@ if (settings$filter_inconsecutive_trial){
 
 ### Prev absent DF for OG baseline
 
-PREV_ABSENT_DF <- MSC %>% 
+PREV_ABSENT_DF <- MSC %>%
   filter(prev_condition == "absent")
 
-PREV_ABSENT_DF$THIRD_FIX_X <- sapply(PREV_ABSENT_DF$CURRENT_FIX_X, function(x) x[RELEVAN_FIX])
-PREV_ABSENT_DF$THIRD_FIX_Y <- sapply(PREV_ABSENT_DF$CURRENT_FIX_Y, function(x) x[RELEVAN_FIX])
+N <- 6  # Change this to your desired number
 
-# Group by subjectnum and compute the mean of THIRD_FIX_X
-avg_third_fix_df <- PREV_ABSENT_DF %>%
+# Extract fixation coordinates dynamically
+for (i in seq_len(N)) {
+  PREV_ABSENT_DF[[paste0("FIX_", i, "_X")]] <- sapply(PREV_ABSENT_DF$CURRENT_FIX_X, function(x) x[i])
+  PREV_ABSENT_DF[[paste0("FIX_", i, "_Y")]] <- sapply(PREV_ABSENT_DF$CURRENT_FIX_Y, function(x) x[i])
+}
+
+# Compute means dynamically
+PREV_ABSENT_FIX_AVG <- PREV_ABSENT_DF %>%
   group_by(subjectnum) %>%
-  summarise(avg_third_fix_x = mean(THIRD_FIX_X, na.rm = TRUE), 
-            avg_third_fix_y = mean(THIRD_FIX_Y, na.rm = TRUE), ) %>%
+  summarise(
+    across(starts_with("FIX_"), mean, na.rm = TRUE)
+  ) %>%
   ungroup()
-
 
 
 if (settings$fliter_prev_absent){
@@ -353,32 +317,14 @@ MSC$CENTER_OG_DISTANCE <- mapply(calc_orthogonal_distance,
 
 # Calculate the OG distance between a specific fixation mean and  the * previous * detection
 
-
-# MSC$AVG_FIX_OG_DISTANCE <- mapply(
-#   function(subj, x1, y1, x2, y2) {
-#     # Find the row in AVG_FIXATION_DF where subjectnum == current subject & CURRENT_FIX_INDEX == 3
-#     idx <- which(AVG_FIXATION_DF$subjectnum == subj)
-#     if (length(idx) == 0) return(NA)
-# 
-#     fix_x <- AVG_FIXATION_DF$mean_CURRENT_FIX_X_3[idx]
-#     fix_y <- AVG_FIXATION_DF$mean_CURRENT_FIX_Y_3[idx]
-# 
-#     calc_orthogonal_distance(fix_x, fix_y, x1, y1, x2, y2)
-#   },
-#   MSC$subjectnum,
-#   MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
-#   MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
-# )
-
-
 # For previous absent
 MSC$AVG_FIX_OG_DISTANCE <- mapply(
   function(subj, x1, y1, x2, y2) {
-    idx <- which(avg_third_fix_df$subjectnum == subj)
+    idx <- which(PREV_ABSENT_FIX_AVG$subjectnum == subj)
     if (length(idx) == 0) return(NA)
 
-    fix_x <- avg_third_fix_df$avg_third_fix_x[idx]
-    fix_y <- avg_third_fix_df$avg_third_fix_y[idx]
+    fix_x <- PREV_ABSENT_FIX_AVG$FIX_3_X[idx]
+    fix_y <- PREV_ABSENT_FIX_AVG$FIX_3_Y[idx]
 
     calc_orthogonal_distance(fix_x, fix_y, x1, y1, x2, y2)
   },
@@ -462,5 +408,5 @@ mean(MSC$AVG_FIX_OG_DISTANCE, na.rm = TRUE)
 
 
 
-# write.csv(MSC[, c("PREV_ORTHOGONAL_DISTANCE_3", "CENTER_OG_DISTANCE", "MEAN_OG_DISTANCE", "AVG_FIX_OG_DISTANCE")], file = "MUTATED_MSC.csv")
+write.csv(MSC[, c("PREV_ORTHOGONAL_DISTANCE_2", "CENTER_OG_DISTANCE", "MEAN_OG_DISTANCE", "AVG_FIX_OG_DISTANCE")], file = "MUTATED_MSC.csv")
 
