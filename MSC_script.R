@@ -87,6 +87,7 @@ MSC <<- mutate(MSC, hit = ifelse(OBJECT_X1 <= CURRENT_FIX_X &
 MSC <<- mutate(MSC, p_hit = ((OBJECT_X2-OBJECT_X1) * (OBJECT_Y2-OBJECT_Y1))/(im_w * im_h)
 )
 
+MSC_ORIGINAL %>% filter(CURRENT_FIX_INDEX == 6) %>% ggplot() + geom_point(aes(x=CURRENT_FIX_X, y=CURRENT_FIX_Y)) + ylim(0,800) + xlim(0,1280) 
 # ============================Clustering==================================== 
 
 
@@ -172,7 +173,7 @@ if (settings$filter_inconsecutive_trial){
 ### Prev absent DF for OG baseline
 
 PREV_ABSENT_DF <- MSC %>%
-  filter(prev_condition == "absent")
+  filter(prev_condition == "absent" & condition == "absent")
 
 N <- 6  # Change this to your desired number
 
@@ -301,6 +302,7 @@ calculate_single_mean_distance  <- function(im_w, im_h, obj_x1, obj_y1, obj_x2, 
   return(mean(distances))
 }
 
+
 MSC$MEAN_OG_DISTANCE <- mapply(calculate_single_mean_distance,
                                MSC$im_w, MSC$im_h,
                                MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
@@ -323,8 +325,8 @@ MSC$AVG_FIX_OG_DISTANCE <- mapply(
     idx <- which(PREV_ABSENT_FIX_AVG$subjectnum == subj)
     if (length(idx) == 0) return(NA)
 
-    fix_x <- PREV_ABSENT_FIX_AVG$FIX_3_X[idx]
-    fix_y <- PREV_ABSENT_FIX_AVG$FIX_3_Y[idx]
+    fix_x <- PREV_ABSENT_FIX_AVG$FIX_4_X[idx]
+    fix_y <- PREV_ABSENT_FIX_AVG$FIX_4_Y[idx]
 
     calc_orthogonal_distance(fix_x, fix_y, x1, y1, x2, y2)
   },
@@ -393,20 +395,8 @@ mean(MSC$CENTER_OG_DISTANCE, na.rm = TRUE)
 mean(MSC$AVG_FIX_OG_DISTANCE, na.rm = TRUE)
 
 
-## what is the baseline?
-## randomly generate dots (based on the previous target window (fixed) and the size of the current image (fixed))
-## calculate the distance between the dots and the (previous target) rectangle using your function 
-## Average the distance for each picture
-#monte carlo simulations/ agent based simulations
+MSC$diff <- -MSC$ PREV_ORTHOGONAL_DISTANCE_2 + MSC$MEAN_OG_DISTANCE  
+#MSC %>% ggplot() + geom_point(aes(x=CENTER_OG_DISTANCE, y=diff))
 
-# Other baseline ideas:
-# 1) Maybe we average the 3rd fixation of the relevant subject, denote by F'
-# The baseline is the OG distance between F' and the object. Here we can consider trials with
-# object absent previous trial  
-
-# 2) Need to consider the tendancy to look at the center
-
-
-
-write.csv(MSC[, c("PREV_ORTHOGONAL_DISTANCE_2", "CENTER_OG_DISTANCE", "MEAN_OG_DISTANCE", "AVG_FIX_OG_DISTANCE")], file = "MUTATED_MSC.csv")
+# write.csv(MSC[, c("PREV_ORTHOGONAL_DISTANCE_2", "CENTER_OG_DISTANCE", "MEAN_OG_DISTANCE", "AVG_FIX_OG_DISTANCE")], file = "MUTATED_MSC.csv")
 
