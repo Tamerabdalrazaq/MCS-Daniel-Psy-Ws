@@ -1,0 +1,71 @@
+
+#Straight line as the actual distance - 
+df_act <- data.frame(
+  x = c(screen_center[1],loc_1_x, loc_2_x, loc_3_x, loc_4_x),
+  y = c(screen_center[2],loc_1_y, loc_2_y, loc_3_y, loc_4_y)
+)
+#start_x =screen_center[1] ; start_y = screen_center[2]
+## defined end_x for the actual line calculation
+
+if (is.na(trial_temp_em$fixation_location_fix2)){
+  end_x =NA ; end_y  = NA
+} else if (trial_temp_em$fixation_location_fix2 == 1){
+  end_x =loc_1_x ; end_y  = loc_1_y
+} else if (trial_temp_em$fixation_location_fix2 == 2){
+  end_x =loc_2_x ; end_y  = loc_2_y
+} else if (trial_temp_em$fixation_location_fix2 == 3){
+  end_x =loc_3_x ; end_y  = loc_3_y
+} else if (trial_temp_em$fixation_location_fix2 == 4){
+  end_x =loc_4_x ; end_y  = loc_4_y
+} else {
+  end_x =NA ; end_y  = NA
+}
+
+
+#Here it is just the fixation point itself (relative to..)
+#straight_angle = atan2(end_y - start_y, end_x - start_x)
+#straight_angle * (180 / pi)
+
+##loc 1 is 45 degrees, loc 2 (-45), loc 3 (-135), loc 4 - 135.
+
+#In this context, the degrees represent the angular deviation in relation to the horizontal plane
+
+## Right eye
+first_sac_samp = trial_temp%>%filter(Non_NA == 1)%>%filter(fix_sac=="fix1")%>%summarize(max(samp))
+start_x_sac_left = trial_temp$left_eye_x[as.numeric(first_sac_samp)];start_y_sac_left = trial_temp$left_eye_y[as.numeric(first_sac_samp)]
+start_x_sac_right = trial_temp$right_eye_x[as.numeric(first_sac_samp)];start_y_sac_right = trial_temp$right_eye_y[as.numeric(first_sac_samp)]
+
+##THESE ARE THE LINES WE TALKED ABOUT!!! 
+straight_angle_left = atan2(end_y - start_y_sac_left, end_x - start_x_sac_left)
+straight_angle_left * (180 / pi)
+straight_angle_right = atan2(end_y - start_y_sac_right, end_x - start_x_sac_right)
+straight_angle_right * (180 / pi)
+
+
+## actual sac dataframes
+sac_samp = trial_temp%>%filter(Non_NA == 1)%>%filter(fix_sac=="sac1")
+
+### calculate the angle for all the trajectory 
+sac_samp = sac_samp %>% rowwise()%>%mutate(
+  ang_left = atan2(left_eye_y - start_y_sac_left, left_eye_x - start_x_sac_left)*(180 / pi),
+  ang_right = atan2(right_eye_y - start_y_sac_right, right_eye_x - start_x_sac_right)*(180 / pi),
+  ang_left_fixed = case_when(
+    trial_temp_em$fixation_location_fix2 == 4 & ang_left<0 ~ ang_left+360,
+    trial_temp_em$fixation_location_fix2 == 3 & ang_left>=0 ~ang_left-360,
+    TRUE ~ang_left
+  ), 
+  ang_right_fixed = case_when(
+    trial_temp_em$fixation_location_fix2 == 4 & ang_right<0 ~ ang_right+360,
+    trial_temp_em$fixation_location_fix2 == 3 & ang_right>=0 ~ang_right-360,
+    TRUE ~ang_right
+  )
+)
+##results
+##results
+right_mean_sac_ang = mean(sac_samp$ang_right_fixed)
+right_obj_ang = straight_angle_right* (180 / pi)
+left_mean_sac_ang = mean(sac_samp$ang_left_fixed)
+left_obj_ang = straight_angle_left* (180 / pi)
+##using 8 ms window for the initial angle
+right_inital_ang = mean(sac_samp$ang_right_fixed[1:8])
+left_inital_ang = mean(sac_samp$ang_left_fixed[1:8])
