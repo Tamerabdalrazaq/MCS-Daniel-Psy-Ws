@@ -21,7 +21,8 @@ settings <- list(
   cluster_fixations = TRUE,
   features_to_remove = c("expected", "searcharray"),
   fliter_prev_absent = TRUE,
-  test_subject = FALSE
+  test_subject = TRUE,
+  calc_mean_OG = TRUE
 )
 
 # ================================Dataset Preprocessing================================
@@ -172,19 +173,19 @@ if (settings$filter_inconsecutive_trial){
 
 ### Prev absent DF for OG baseline
 
-PREV_ABSENT_DF <- MSC %>%
+PREV_CURR_ABSENT_DF <- MSC %>%
   filter(prev_condition == "absent" & condition == "absent")
 
 N <- 6  # Change this to your desired number
 
 # Extract fixation coordinates dynamically
 for (i in seq_len(N)) {
-  PREV_ABSENT_DF[[paste0("FIX_", i, "_X")]] <- sapply(PREV_ABSENT_DF$CURRENT_FIX_X, function(x) x[i])
-  PREV_ABSENT_DF[[paste0("FIX_", i, "_Y")]] <- sapply(PREV_ABSENT_DF$CURRENT_FIX_Y, function(x) x[i])
+  PREV_CURR_ABSENT_DF[[paste0("FIX_", i, "_X")]] <- sapply(PREV_CURR_ABSENT_DF$CURRENT_FIX_X, function(x) x[i])
+  PREV_CURR_ABSENT_DF[[paste0("FIX_", i, "_Y")]] <- sapply(PREV_CURR_ABSENT_DF$CURRENT_FIX_Y, function(x) x[i])
 }
 
 # Compute means dynamically
-PREV_ABSENT_FIX_AVG <- PREV_ABSENT_DF %>%
+PREV_ABSENT_FIX_AVG <- PREV_CURR_ABSENT_DF %>%
   group_by(subjectnum) %>%
   summarise(
     across(starts_with("FIX_"), mean, na.rm = TRUE)
@@ -303,10 +304,13 @@ calculate_single_mean_distance  <- function(im_w, im_h, obj_x1, obj_y1, obj_x2, 
 }
 
 
-MSC$MEAN_OG_DISTANCE <- mapply(calculate_single_mean_distance,
+if (settings$calc_mean_OG) {
+  MSC$MEAN_OG_DISTANCE <- mapply(calculate_single_mean_distance,
                                MSC$im_w, MSC$im_h,
                                MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
                                MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2)
+
+}
 
 
 # Calculate the OG distance between center and  the * previous * detection
@@ -320,7 +324,52 @@ MSC$CENTER_OG_DISTANCE <- mapply(calc_orthogonal_distance,
 # Calculate the OG distance between a specific fixation mean and  the * previous * detection
 
 # For previous absent
-MSC$AVG_FIX_OG_DISTANCE <- mapply(
+MSC$AVG_FIX_1_PREV_OG_DISTANCE <- mapply(
+  function(subj, x1, y1, x2, y2) {
+    idx <- which(PREV_ABSENT_FIX_AVG$subjectnum == subj)
+    if (length(idx) == 0) return(NA)
+
+    fix_x <- PREV_ABSENT_FIX_AVG$FIX_1_X[idx]
+    fix_y <- PREV_ABSENT_FIX_AVG$FIX_1_Y[idx]
+
+    calc_orthogonal_distance(fix_x, fix_y, x1, y1, x2, y2)
+  },
+  MSC$subjectnum,
+  MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
+  MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
+)
+# For previous absent
+MSC$AVG_FIX_2_PREV_OG_DISTANCE <- mapply(
+  function(subj, x1, y1, x2, y2) {
+    idx <- which(PREV_ABSENT_FIX_AVG$subjectnum == subj)
+    if (length(idx) == 0) return(NA)
+
+    fix_x <- PREV_ABSENT_FIX_AVG$FIX_2_X[idx]
+    fix_y <- PREV_ABSENT_FIX_AVG$FIX_2_Y[idx]
+
+    calc_orthogonal_distance(fix_x, fix_y, x1, y1, x2, y2)
+  },
+  MSC$subjectnum,
+  MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
+  MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
+)
+
+MSC$AVG_FIX_3_PREV_OG_DISTANCE <- mapply(
+  function(subj, x1, y1, x2, y2) {
+    idx <- which(PREV_ABSENT_FIX_AVG$subjectnum == subj)
+    if (length(idx) == 0) return(NA)
+
+    fix_x <- PREV_ABSENT_FIX_AVG$FIX_3_X[idx]
+    fix_y <- PREV_ABSENT_FIX_AVG$FIX_3_Y[idx]
+
+    calc_orthogonal_distance(fix_x, fix_y, x1, y1, x2, y2)
+  },
+  MSC$subjectnum,
+  MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
+  MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
+)
+
+MSC$AVG_FIX_4_PREV_OG_DISTANCE <- mapply(
   function(subj, x1, y1, x2, y2) {
     idx <- which(PREV_ABSENT_FIX_AVG$subjectnum == subj)
     if (length(idx) == 0) return(NA)
@@ -392,11 +441,25 @@ mean(MSC$PREV_ORTHOGONAL_DISTANCE_8, na.rm = TRUE)
 
 mean(MSC$MEAN_OG_DISTANCE, na.rm = TRUE)
 mean(MSC$CENTER_OG_DISTANCE, na.rm = TRUE)
-mean(MSC$AVG_FIX_OG_DISTANCE, na.rm = TRUE)
+mean(MSC$AVG_FIX_1_PREV_OG_DISTANCE, na.rm = TRUE)
+mean(MSC$AVG_FIX_2_PREV_OG_DISTANCE, na.rm = TRUE)
+mean(MSC$AVG_FIX_3_PREV_OG_DISTANCE, na.rm = TRUE)
+mean(MSC$AVG_FIX_4_PREV_OG_DISTANCE, na.rm = TRUE)
 
 
-MSC$diff <- -MSC$ PREV_ORTHOGONAL_DISTANCE_2 + MSC$MEAN_OG_DISTANCE  
-#MSC %>% ggplot() + geom_point(aes(x=CENTER_OG_DISTANCE, y=diff))
+
+
+MSC$diff <- -MSC$PREV_ORTHOGONAL_DISTANCE_2 + MSC$MEAN_OG_DISTANCE  
+MSC %>% ggplot() + geom_point(aes(x=CENTER_OG_DISTANCE, y=diff))
 
 # write.csv(MSC[, c("PREV_ORTHOGONAL_DISTANCE_2", "CENTER_OG_DISTANCE", "MEAN_OG_DISTANCE", "AVG_FIX_OG_DISTANCE")], file = "MUTATED_MSC.csv")
+# > write_json(MSC, "__data.json", pretty = TRUE)
 
+
+
+
+
+# Meeting 2.4.25
+# New baseline: 
+#1 Calculate the distribution of each subject for the i-th fixation angle - similar to avg_fix_i_OG_distance but with different measure and replacing the avg with a distribution
+#2 Taking image pairs XY, seeing across subjects where they tend to look?? 
