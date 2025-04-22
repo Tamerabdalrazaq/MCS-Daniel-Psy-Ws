@@ -7,6 +7,7 @@ rm(list = ls())
 
 DISPLAY_W <- 1280
 DISPLAY_H <- 800
+CENTER <- c(DISPLAY_W, DISPLAY_H)/2
 RANDOM_POINTS_COUNT <- 1000
 
 MSC_PATH = "C:/Users/averr/OneDrive/Desktop/TAU/Year 4/Semestar A/Psych Workshop/Scripts/1. Object Detection/MSC_DS_PROCESSED_DETECTINOS_25_12_2024.csv"
@@ -184,6 +185,37 @@ for (i in seq_len(N)) {
   PREV_CURR_ABSENT_DF[[paste0("FIX_", i, "_Y")]] <- sapply(PREV_CURR_ABSENT_DF$CURRENT_FIX_Y, function(x) x[i])
 }
 
+# PREV_CURR_ABSENT_DF$FIX_1_VECTOR <- mapply(
+#   function(c1, c2) c(c1 - DISPLAY_W/2, c2 - DISPLAY_H/2),
+#   PREV_CURR_ABSENT_DF$FIX_1_X, PREV_CURR_ABSENT_DF$FIX_1_Y, SIMPLIFY = FALSE)
+
+N <- 5  # <-- change this to your actual N
+
+# Loop through each i and compute the corresponding FIX_i_VECTOR
+get_diff_vector <- function(coords, origin) {
+  # coords: a vector of length 2, c(c1, c2)
+  # origin: a vector of length 2, c(DISPLAY_W, DISPLAY_H)
+  
+  if (length(coords) != 2 || length(origin) != 2) {
+    stop("Both 'coords' and 'origin' must be numeric vectors of length 2.")
+  }
+  
+  return(coords - origin)
+}
+
+
+for (i in 1:N) {
+  x_col <- paste0("FIX_", i, "_X")
+  y_col <- paste0("FIX_", i, "_Y")
+  vec_col <- paste0("FIX_", i, "_VECTOR")
+  
+  PREV_CURR_ABSENT_DF[[vec_col]] <- mapply(
+    function(c1, c2) get_diff_vector(c(c1, c2), c(DISPLAY_W, DISPLAY_H)/2),
+    PREV_CURR_ABSENT_DF[[x_col]], PREV_CURR_ABSENT_DF[[y_col]], SIMPLIFY = FALSE)
+}
+
+
+
 # Compute means dynamically
 PREV_ABSENT_FIX_AVG <- PREV_CURR_ABSENT_DF %>%
   group_by(subjectnum) %>%
@@ -191,6 +223,17 @@ PREV_ABSENT_FIX_AVG <- PREV_CURR_ABSENT_DF %>%
     across(starts_with("FIX_"), mean, na.rm = TRUE)
   ) %>%
   ungroup()
+
+
+PREV_CURR_ABSENT_FIX_VECTORS <- PREV_CURR_ABSENT_DF %>%
+  group_by(subjectnum) %>%
+  summarize(
+    FIX_1_VECTOR = list(FIX_1_VECTOR),
+    FIX_2_VECTOR = list(FIX_2_VECTOR),
+    FIX_3_VECTOR = list(FIX_3_VECTOR),
+    FIX_4_VECTOR = list(FIX_4_VECTOR),
+    FIX_5_VECTOR = list(FIX_5_VECTOR),
+  )
 
 
 if (settings$fliter_prev_absent){
@@ -275,6 +318,49 @@ MSC <- MSC %>%
       !is.na(PREV_OBJ_X1) & !is.na(PREV_OBJ_Y1) & !is.na(PREV_OBJ_X2) & !is.na(PREV_OBJ_Y2),
       mapply(
         calc_orthogonal_distances,
+        CURRENT_FIX_X, CURRENT_FIX_Y,
+        PREV_OBJ_X1, PREV_OBJ_Y1, PREV_OBJ_X2, PREV_OBJ_Y2
+      ),
+      NA  # Assign NA if any required column has NA
+    )
+    
+  )
+
+
+# ============================Vector Difference Dot Product==================================== 
+
+calc_dot_product <- function(v1, v2) {
+  if (length(v1) != length(v2)) {
+    stop("Vectors must be the same length.")
+  }
+  
+  if (any(is.na(v1)) || any(is.na(v2))) {
+    return(NA)
+  }
+  sum(v1 * v2)
+}
+
+get_curr_fix_prev_obj_dot_product <- function(FIX_X, FIX_Y, obj_x1, obj_y1, obj_x2, obj_y2){
+  products <- numeric(length(FIX_X))
+  obj_center <- c(obj_x1+obj_x2, obj_y1+obj_y2)/2
+  obj_vector <- get_diff_vector(obj_center, CENTER)
+  
+  # Iterate over the elements of X and Y
+  for (i in seq_along(FIX_X)) {
+    fix_vector <- get_diff_vector(c(FIX_X[i], FIX_Y[i]), CENTER)
+    products[i] <- calc_dot_product(obj_vector, fix_vector)
+  }
+  
+  # Return the list of distances
+  return(products)
+}
+
+MSC <- MSC %>%
+  mutate(
+    PREV_OBJ_FIX_DOT_PRODUCT = ifelse(
+      !is.na(PREV_OBJ_X1) & !is.na(PREV_OBJ_Y1) & !is.na(PREV_OBJ_X2) & !is.na(PREV_OBJ_Y2),
+      mapply(
+        get_curr_fix_prev_obj_dot_product,
         CURRENT_FIX_X, CURRENT_FIX_Y,
         PREV_OBJ_X1, PREV_OBJ_Y1, PREV_OBJ_X2, PREV_OBJ_Y2
       ),
@@ -385,59 +471,190 @@ MSC$AVG_FIX_4_PREV_OG_DISTANCE <- mapply(
 )
 
 
+
+# Baseline for dot product vector difference
+MSC$DIST_FIX_1_PREV_OBJ_DOT_PRODUCT <- Map(
+  function(subj, x1, y1, x2, y2) {
+    idx <- which(PREV_CURR_ABSENT_FIX_VECTORS$subjectnum == subj)
+    print(idx)
+    if (length(idx) == 0) {
+      warning("No match for subjectnum")
+      return(NA)
+    }
+    if (length(idx) > 1) {
+      warning("Multiple matches for subjectnum")
+      return(NA)
+    }
+    obj_center = c(x1+x2, y1+y2)/2
+    FIX_VECTORS <- PREV_CURR_ABSENT_FIX_VECTORS$FIX_1_VECTOR[[idx]]
+    products <- numeric(length(FIX_VECTORS))
+    for (i in seq_along(FIX_VECTORS)) {
+      product = calc_dot_product(FIX_VECTORS[[i]], obj_center)
+      products[i] = product
+    }
+    return(products)
+  },
+  MSC$subjectnum,
+  MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
+  MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
+)
+
+MSC <- MSC %>%
+  mutate(AVG_DIST_FIX_1_PREV_OBJ_DOT_PRODUCT = sapply(DIST_FIX_1_PREV_OBJ_DOT_PRODUCT, mean))
+
+
+MSC$DIST_FIX_2_PREV_OBJ_DOT_PRODUCT <- Map(
+  function(subj, x1, y1, x2, y2) {
+    idx <- which(PREV_CURR_ABSENT_FIX_VECTORS$subjectnum == subj)
+    print(idx)
+    if (length(idx) == 0) {
+      warning("No match for subjectnum")
+      return(NA)
+    }
+    if (length(idx) > 1) {
+      warning("Multiple matches for subjectnum")
+      return(NA)
+    }
+    obj_center = c(x1+x2, y1+y2)/2
+    FIX_VECTORS <- PREV_CURR_ABSENT_FIX_VECTORS$FIX_2_VECTOR[[idx]]
+    products <- numeric(length(FIX_VECTORS))
+    for (i in seq_along(FIX_VECTORS)) {
+      product = calc_dot_product(FIX_VECTORS[[i]], obj_center)
+      products[i] = product
+    }
+    return(products)
+  },
+  MSC$subjectnum,
+  MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
+  MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
+)
+
+MSC <- MSC %>%
+  mutate(AVG_DIST_FIX_2_PREV_OBJ_DOT_PRODUCT = sapply(DIST_FIX_2_PREV_OBJ_DOT_PRODUCT, mean))
+
+
+MSC$DIST_FIX_3_PREV_OBJ_DOT_PRODUCT <- Map(
+  function(subj, x1, y1, x2, y2) {
+    idx <- which(PREV_CURR_ABSENT_FIX_VECTORS$subjectnum == subj)
+    print(idx)
+    if (length(idx) == 0) {
+      warning("No match for subjectnum")
+      return(NA)
+    }
+    if (length(idx) > 1) {
+      warning("Multiple matches for subjectnum")
+      return(NA)
+    }
+    obj_center = c(x1+x2, y1+y2)/2
+    FIX_VECTORS <- PREV_CURR_ABSENT_FIX_VECTORS$FIX_3_VECTOR[[idx]]
+    products <- numeric(length(FIX_VECTORS))
+    for (i in seq_along(FIX_VECTORS)) {
+      product = calc_dot_product(FIX_VECTORS[[i]], obj_center)
+      products[i] = product
+    }
+    return(products)
+  },
+  MSC$subjectnum,
+  MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
+  MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
+)
+
+MSC <- MSC %>%
+  mutate(AVG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT = sapply(DIST_FIX_3_PREV_OBJ_DOT_PRODUCT, mean, na.rm = TRUE))
+
 # ============================Analysis==================================== 
 
 # Probability analysis
 
-MSC = MSC%>%mutate(
-  prev_hit_1 = sapply(prev_hit, function(x) x[1]),
-  prev_hit_2 = sapply(prev_hit, function(x) x[2]),
-  prev_hit_3 = sapply(prev_hit, function(x) x[3]),
-  prev_hit_4 = sapply(prev_hit, function(x) x[4]),
-  prev_hit_5 = sapply(prev_hit, function(x) x[5]),
-  prev_hit_6 = sapply(prev_hit, function(x) x[6]),
-  prev_hit_7 = sapply(prev_hit, function(x) x[7]),
-  prev_hit_8 = sapply(prev_hit, function(x) x[8])
-)
-
-##
-table(MSC$condition,MSC$prev_condition)
-
-
-prop.table(table(MSC$prev_hit_1))
-prop.table(table(MSC$prev_hit_2))
-prop.table(table(MSC$prev_hit_3))
-prop.table(table(MSC$prev_hit_4))
-prop.table(table(MSC$prev_hit_5))
-prop.table(table(MSC$prev_hit_6))
-prop.table(table(MSC$prev_hit_7))
-prop.table(table(MSC$prev_hit_8))
-
-## Some indiciation of an effect
-MSC%>%summarize(mean(p_prev_obj_hit, na.rm = TRUE))
+# MSC = MSC%>%mutate(
+#   prev_hit_1 = sapply(prev_hit, function(x) x[1]),
+#   prev_hit_2 = sapply(prev_hit, function(x) x[2]),
+#   prev_hit_3 = sapply(prev_hit, function(x) x[3]),
+#   prev_hit_4 = sapply(prev_hit, function(x) x[4]),
+#   prev_hit_5 = sapply(prev_hit, function(x) x[5]),
+#   prev_hit_6 = sapply(prev_hit, function(x) x[6]),
+#   prev_hit_7 = sapply(prev_hit, function(x) x[7]),
+#   prev_hit_8 = sapply(prev_hit, function(x) x[8])
+# )
+# 
+# ##
+# table(MSC$condition,MSC$prev_condition)
+# 
+# 
+# prop.table(table(MSC$prev_hit_1))
+# prop.table(table(MSC$prev_hit_2))
+# prop.table(table(MSC$prev_hit_3))
+# prop.table(table(MSC$prev_hit_4))
+# prop.table(table(MSC$prev_hit_5))
+# prop.table(table(MSC$prev_hit_6))
+# prop.table(table(MSC$prev_hit_7))
+# prop.table(table(MSC$prev_hit_8))
+# 
+# ## Some indiciation of an effect
+# MSC%>%summarize(mean(p_prev_obj_hit, na.rm = TRUE))
 
 
 # OG Distance Analysis
 
-MSC = MSC%>%mutate(
-  PREV_ORTHOGONAL_DISTANCE_1 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[1]),
-  PREV_ORTHOGONAL_DISTANCE_2 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[2]),
-  PREV_ORTHOGONAL_DISTANCE_3 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[3]),
-  PREV_ORTHOGONAL_DISTANCE_4 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[4]),
-  PREV_ORTHOGONAL_DISTANCE_5 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[5]),
-  PREV_ORTHOGONAL_DISTANCE_6 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[6]),
-  PREV_ORTHOGONAL_DISTANCE_7 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[7]),
-  PREV_ORTHOGONAL_DISTANCE_8 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[8])
+# MSC <- MSC%>%mutate(
+#   PREV_ORTHOGONAL_DISTANCE_1 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[1]),
+#   PREV_ORTHOGONAL_DISTANCE_2 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[2]),
+#   PREV_ORTHOGONAL_DISTANCE_3 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[3]),
+#   PREV_ORTHOGONAL_DISTANCE_4 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[4]),
+#   PREV_ORTHOGONAL_DISTANCE_5 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[5]),
+#   PREV_ORTHOGONAL_DISTANCE_6 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[6]),
+#   PREV_ORTHOGONAL_DISTANCE_7 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[7]),
+#   PREV_ORTHOGONAL_DISTANCE_8 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[8])
+# )
+# 
+# mean(MSC$PREV_ORTHOGONAL_DISTANCE_1, na.rm = TRUE)
+# mean(MSC$PREV_ORTHOGONAL_DISTANCE_2, na.rm = TRUE)
+# mean(MSC$PREV_ORTHOGONAL_DISTANCE_3, na.rm = TRUE)
+# mean(MSC$PREV_ORTHOGONAL_DISTANCE_4, na.rm = TRUE)
+# mean(MSC$PREV_ORTHOGONAL_DISTANCE_5, na.rm = TRUE)
+# mean(MSC$PREV_ORTHOGONAL_DISTANCE_6, na.rm = TRUE)
+# mean(MSC$PREV_ORTHOGONAL_DISTANCE_7, na.rm = TRUE)
+# mean(MSC$PREV_ORTHOGONAL_DISTANCE_8, na.rm = TRUE)
+# 
+# mean(MSC$MEAN_OG_DISTANCE, na.rm = TRUE)
+# mean(MSC$CENTER_OG_DISTANCE, na.rm = TRUE)
+# mean(MSC$AVG_FIX_1_PREV_OG_DISTANCE, na.rm = TRUE)
+# mean(MSC$AVG_FIX_2_PREV_OG_DISTANCE, na.rm = TRUE)
+# mean(MSC$AVG_FIX_3_PREV_OG_DISTANCE, na.rm = TRUE)
+# mean(MSC$AVG_FIX_4_PREV_OG_DISTANCE, na.rm = TRUE)
+
+
+# Vector Difference Analysis
+
+MSC <- MSC%>%mutate(
+  PREV_OBJ_FIX_DOT_PRODUCT_1 = sapply(PREV_OBJ_FIX_DOT_PRODUCT, function(x) x[1]),
+  PREV_OBJ_FIX_DOT_PRODUCT_2 = sapply(PREV_OBJ_FIX_DOT_PRODUCT, function(x) x[2]),
+  PREV_OBJ_FIX_DOT_PRODUCT_3 = sapply(PREV_OBJ_FIX_DOT_PRODUCT, function(x) x[3]),
+  PREV_OBJ_FIX_DOT_PRODUCT_4 = sapply(PREV_OBJ_FIX_DOT_PRODUCT, function(x) x[4]),
+  PREV_OBJ_FIX_DOT_PRODUCT_5 = sapply(PREV_OBJ_FIX_DOT_PRODUCT, function(x) x[5]),
+  PREV_OBJ_FIX_DOT_PRODUCT_6 = sapply(PREV_OBJ_FIX_DOT_PRODUCT, function(x) x[6]),
+  PREV_OBJ_FIX_DOT_PRODUCT_7 = sapply(PREV_OBJ_FIX_DOT_PRODUCT, function(x) x[7]),
+  PREV_OBJ_FIX_DOT_PRODUCT_8 = sapply(PREV_OBJ_FIX_DOT_PRODUCT, function(x) x[8])
 )
 
-mean(MSC$PREV_ORTHOGONAL_DISTANCE_1, na.rm = TRUE)
-mean(MSC$PREV_ORTHOGONAL_DISTANCE_2, na.rm = TRUE)
-mean(MSC$PREV_ORTHOGONAL_DISTANCE_3, na.rm = TRUE)
-mean(MSC$PREV_ORTHOGONAL_DISTANCE_4, na.rm = TRUE)
-mean(MSC$PREV_ORTHOGONAL_DISTANCE_5, na.rm = TRUE)
-mean(MSC$PREV_ORTHOGONAL_DISTANCE_6, na.rm = TRUE)
-mean(MSC$PREV_ORTHOGONAL_DISTANCE_7, na.rm = TRUE)
-mean(MSC$PREV_ORTHOGONAL_DISTANCE_8, na.rm = TRUE)
+mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_1, na.rm = TRUE)
+mean(MSC$AVG_DIST_FIX_1_PREV_OBJ_DOT_PRODUCT, na.rm = TRUE)
+
+mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_2, na.rm = TRUE)
+mean(MSC$AVG_DIST_FIX_2_PREV_OBJ_DOT_PRODUCT, na.rm = TRUE)
+
+mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_3, na.rm = TRUE)
+mean(MSC$AVG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT, na.rm = TRUE)
+
+mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_4, na.rm = TRUE)
+
+mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_5, na.rm = TRUE)
+
+mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_6, na.rm = TRUE)
+
+mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_7, na.rm = TRUE)
+
+mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_8, na.rm = TRUE)
 
 mean(MSC$MEAN_OG_DISTANCE, na.rm = TRUE)
 mean(MSC$CENTER_OG_DISTANCE, na.rm = TRUE)
@@ -447,10 +664,11 @@ mean(MSC$AVG_FIX_3_PREV_OG_DISTANCE, na.rm = TRUE)
 mean(MSC$AVG_FIX_4_PREV_OG_DISTANCE, na.rm = TRUE)
 
 
+MSC_DOT_PRODUCTS <- MSC[, c("PREV_OBJ_FIX_DOT_PRODUCT_1", "AVG_DIST_FIX_1_PREV_OBJ_DOT_PRODUCT","PREV_OBJ_FIX_DOT_PRODUCT_2", "AVG_DIST_FIX_2_PREV_OBJ_DOT_PRODUCT", "PREV_OBJ_FIX_DOT_PRODUCT_3", "AVG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT")]
 
 
-MSC$diff <- -MSC$PREV_ORTHOGONAL_DISTANCE_2 + MSC$MEAN_OG_DISTANCE  
-MSC %>% ggplot() + geom_point(aes(x=CENTER_OG_DISTANCE, y=diff))
+# MSC$diff <- -MSC$PREV_ORTHOGONAL_DISTANCE_2 + MSC$MEAN_OG_DISTANCE  
+# MSC %>% ggplot() + geom_point(aes(x=CENTER_OG_DISTANCE, y=diff))
 
 # write.csv(MSC[, c("PREV_ORTHOGONAL_DISTANCE_2", "CENTER_OG_DISTANCE", "MEAN_OG_DISTANCE", "AVG_FIX_OG_DISTANCE")], file = "MUTATED_MSC.csv")
 # > write_json(MSC, "__data.json", pretty = TRUE)
