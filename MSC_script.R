@@ -23,7 +23,7 @@ settings <- list(
   features_to_remove = c("expected", "searcharray"),
   fliter_prev_absent = TRUE,
   test_subject = TRUE,
-  calc_mean_OG = TRUE
+  calc_mean_OG = FALSE
 )
 
 # ================================Dataset Preprocessing================================
@@ -329,7 +329,12 @@ MSC <- MSC %>%
 
 # ============================Vector Difference Dot Product==================================== 
 
-calc_dot_product <- function(v1, v2) {
+calc_norm <- function(v) {
+  dist <- euc_l2(v[1], v[2], 0, 0)
+  return(dist)
+}
+
+calc_dot_product <- function(v1, v2, normalize = TRUE, max_norm = NULL) {
   if (length(v1) != length(v2)) {
     stop("Vectors must be the same length.")
   }
@@ -337,7 +342,24 @@ calc_dot_product <- function(v1, v2) {
   if (any(is.na(v1)) || any(is.na(v2))) {
     return(NA)
   }
-  sum(v1 * v2)
+  
+  # Handle vector length normalization based on normalize (i.e len = 1) or max_norm  
+  v1_norm = calc_norm(v1)
+  v2_norm = calc_norm(v2)
+  if(normalize){
+    v1 <- v1*(1/v1_norm)
+    v2 <- v2*(1/v2_norm)
+  } else if (!is.null(max_norm)){
+    if(v1_norm > max_norm){
+      v1 <- (v1/v1_norm)*max_norm
+    }
+    if(v2_norm > max_norm){
+      v2 <- (v2/v2_norm)*max_norm
+    }
+    v1 <- v1 * (1/max_norm)
+    v2 <- v2 * (1/max_norm)
+  }
+  return(sum(v1 * v2))
 }
 
 get_curr_fix_prev_obj_dot_product <- function(FIX_X, FIX_Y, obj_x1, obj_y1, obj_x2, obj_y2){
@@ -348,7 +370,8 @@ get_curr_fix_prev_obj_dot_product <- function(FIX_X, FIX_Y, obj_x1, obj_y1, obj_
   # Iterate over the elements of X and Y
   for (i in seq_along(FIX_X)) {
     fix_vector <- get_diff_vector(c(FIX_X[i], FIX_Y[i]), CENTER)
-    products[i] <- calc_dot_product(obj_vector, fix_vector)
+    products[i] <- calc_dot_product(obj_vector, fix_vector,
+                                    normalize = FALSE, max_norm = calc_norm(obj_vector))
   }
   
   # Return the list of distances
@@ -476,7 +499,6 @@ MSC$AVG_FIX_4_PREV_OG_DISTANCE <- mapply(
 MSC$DIST_FIX_1_PREV_OBJ_DOT_PRODUCT <- Map(
   function(subj, x1, y1, x2, y2) {
     idx <- which(PREV_CURR_ABSENT_FIX_VECTORS$subjectnum == subj)
-    print(idx)
     if (length(idx) == 0) {
       warning("No match for subjectnum")
       return(NA)
@@ -489,7 +511,8 @@ MSC$DIST_FIX_1_PREV_OBJ_DOT_PRODUCT <- Map(
     FIX_VECTORS <- PREV_CURR_ABSENT_FIX_VECTORS$FIX_1_VECTOR[[idx]]
     products <- numeric(length(FIX_VECTORS))
     for (i in seq_along(FIX_VECTORS)) {
-      product = calc_dot_product(FIX_VECTORS[[i]], obj_center)
+      product = calc_dot_product(FIX_VECTORS[[i]], obj_center, 
+                                 normalize = FALSE, max_norm = calc_norm(obj_center))
       products[i] = product
     }
     return(products)
@@ -506,7 +529,6 @@ MSC <- MSC %>%
 MSC$DIST_FIX_2_PREV_OBJ_DOT_PRODUCT <- Map(
   function(subj, x1, y1, x2, y2) {
     idx <- which(PREV_CURR_ABSENT_FIX_VECTORS$subjectnum == subj)
-    print(idx)
     if (length(idx) == 0) {
       warning("No match for subjectnum")
       return(NA)
@@ -519,7 +541,8 @@ MSC$DIST_FIX_2_PREV_OBJ_DOT_PRODUCT <- Map(
     FIX_VECTORS <- PREV_CURR_ABSENT_FIX_VECTORS$FIX_2_VECTOR[[idx]]
     products <- numeric(length(FIX_VECTORS))
     for (i in seq_along(FIX_VECTORS)) {
-      product = calc_dot_product(FIX_VECTORS[[i]], obj_center)
+      product = calc_dot_product(FIX_VECTORS[[i]], obj_center,
+                                 normalize = FALSE, max_norm = calc_norm(obj_center))
       products[i] = product
     }
     return(products)
@@ -536,7 +559,6 @@ MSC <- MSC %>%
 MSC$DIST_FIX_3_PREV_OBJ_DOT_PRODUCT <- Map(
   function(subj, x1, y1, x2, y2) {
     idx <- which(PREV_CURR_ABSENT_FIX_VECTORS$subjectnum == subj)
-    print(idx)
     if (length(idx) == 0) {
       warning("No match for subjectnum")
       return(NA)
@@ -549,7 +571,8 @@ MSC$DIST_FIX_3_PREV_OBJ_DOT_PRODUCT <- Map(
     FIX_VECTORS <- PREV_CURR_ABSENT_FIX_VECTORS$FIX_3_VECTOR[[idx]]
     products <- numeric(length(FIX_VECTORS))
     for (i in seq_along(FIX_VECTORS)) {
-      product = calc_dot_product(FIX_VECTORS[[i]], obj_center)
+      product = calc_dot_product(FIX_VECTORS[[i]], obj_center, 
+                                 normalize = FALSE, max_norm = calc_norm(obj_center))
       products[i] = product
     }
     return(products)
