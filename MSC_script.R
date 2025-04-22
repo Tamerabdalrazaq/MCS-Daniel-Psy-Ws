@@ -371,7 +371,7 @@ get_curr_fix_prev_obj_dot_product <- function(FIX_X, FIX_Y, obj_x1, obj_y1, obj_
   for (i in seq_along(FIX_X)) {
     fix_vector <- get_diff_vector(c(FIX_X[i], FIX_Y[i]), CENTER)
     products[i] <- calc_dot_product(obj_vector, fix_vector,
-                                    normalize = FALSE, max_norm = calc_norm(obj_vector))
+                                    normalize = TRUE, max_norm = NULL)
   }
   
   # Return the list of distances
@@ -512,7 +512,7 @@ MSC$DIST_FIX_1_PREV_OBJ_DOT_PRODUCT <- Map(
     products <- numeric(length(FIX_VECTORS))
     for (i in seq_along(FIX_VECTORS)) {
       product = calc_dot_product(FIX_VECTORS[[i]], obj_center, 
-                                 normalize = FALSE, max_norm = calc_norm(obj_center))
+                                 normalize = TRUE, max_norm = NULL)
       products[i] = product
     }
     return(products)
@@ -542,7 +542,7 @@ MSC$DIST_FIX_2_PREV_OBJ_DOT_PRODUCT <- Map(
     products <- numeric(length(FIX_VECTORS))
     for (i in seq_along(FIX_VECTORS)) {
       product = calc_dot_product(FIX_VECTORS[[i]], obj_center,
-                                 normalize = FALSE, max_norm = calc_norm(obj_center))
+                                 normalize = TRUE, max_norm = NULL)
       products[i] = product
     }
     return(products)
@@ -572,7 +572,7 @@ MSC$DIST_FIX_3_PREV_OBJ_DOT_PRODUCT <- Map(
     products <- numeric(length(FIX_VECTORS))
     for (i in seq_along(FIX_VECTORS)) {
       product = calc_dot_product(FIX_VECTORS[[i]], obj_center, 
-                                 normalize = FALSE, max_norm = calc_norm(obj_center))
+                                 normalize = TRUE, max_norm = NULL)
       products[i] = product
     }
     return(products)
