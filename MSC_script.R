@@ -3,6 +3,8 @@ library(ggplot2)
 library(readr)
 library(tidyr)
 library(tidyverse)
+library(purrr)
+
 rm(list = ls())
 
 DISPLAY_W <- 1280
@@ -142,6 +144,11 @@ MSC <- MSC %>%
   )
 
 
+# Fix 
+MSC <- MSC %>% mutate(
+lag_trial_index = lag(TRIAL_INDEX)
+)
+
 # Custom function
 calc_hit <- function(FIX_X, FIX_Y, PREV_X1, PREV_Y1, PREV_X2, PREV_Y2) {
   return(ifelse(PREV_X1 <= FIX_X & PREV_Y1 <= FIX_Y & PREV_X2 >= FIX_X & PREV_Y2 >= FIX_Y, 1, 0))
@@ -167,12 +174,12 @@ if (settings$filter_bad_detections) {
 if (settings$filter_inconsecutive_trial){
   MSC <- MSC %>%
     filter(
-      TRIAL_INDEX == lag(TRIAL_INDEX) + 1
+      TRIAL_INDEX == lag_trial_index + 1
     )
 }
 
 
-### Prev absent DF for OG baseline
+### Prev absent DF for baseline
 
 PREV_CURR_ABSENT_DF <- MSC %>%
   filter(prev_condition == "absent" & condition == "absent")
@@ -216,7 +223,7 @@ for (i in 1:N) {
 
 
 
-# Compute means dynamically
+# Compute means dynamically (for OG dist)
 PREV_ABSENT_FIX_AVG <- PREV_CURR_ABSENT_DF %>%
   group_by(subjectnum) %>%
   summarise(
@@ -235,6 +242,9 @@ PREV_CURR_ABSENT_FIX_VECTORS <- PREV_CURR_ABSENT_DF %>%
     FIX_5_VECTOR = list(FIX_5_VECTOR),
   )
 
+
+
+# CONTINUE FILTER ###############
 
 if (settings$fliter_prev_absent){
   MSC <- MSC %>% filter(prev_condition == "present")
@@ -495,7 +505,11 @@ MSC$AVG_FIX_4_PREV_OG_DISTANCE <- mapply(
 
 
 
-# Baseline for dot product vector difference
+
+
+
+
+#####=== Baseline for dot product vector difference===#####
 MSC$DIST_FIX_1_PREV_OBJ_DOT_PRODUCT <- Map(
   function(subj, x1, y1, x2, y2) {
     idx <- which(PREV_CURR_ABSENT_FIX_VECTORS$subjectnum == subj)
@@ -694,8 +708,8 @@ MSC_DOT_PRODUCTS <- MSC[, c("PREV_OBJ_FIX_DOT_PRODUCT_1", "AVG_DIST_FIX_1_PREV_O
 # MSC %>% ggplot() + geom_point(aes(x=CENTER_OG_DISTANCE, y=diff))
 
 # write.csv(MSC[, c("PREV_ORTHOGONAL_DISTANCE_2", "CENTER_OG_DISTANCE", "MEAN_OG_DISTANCE", "AVG_FIX_OG_DISTANCE")], file = "MUTATED_MSC.csv")
-# > write_json(MSC, "__data.json", pretty = TRUE)
-
+# write.csv(MSC[, c("PREV_ORTHOGONAL_DISTANCE_2", "CENTER_OG_DISTANCE", "MEAN_OG_DISTANCE", "AVG_FIX_OG_DISTANCE")], file = "MUTATED_MSC.csv")
+# write_json(MSC, "__data.json", pretty = TRUE)
 
 
 
@@ -704,3 +718,7 @@ MSC_DOT_PRODUCTS <- MSC[, c("PREV_OBJ_FIX_DOT_PRODUCT_1", "AVG_DIST_FIX_1_PREV_O
 # New baseline: 
 #1 Calculate the distribution of each subject for the i-th fixation angle - similar to avg_fix_i_OG_distance but with different measure and replacing the avg with a distribution
 #2 Taking image pairs XY, seeing across subjects where they tend to look?? 
+
+
+#fix dot vector baseline  issue:
+# datastructures problem - list of list of vector -> list of vector
