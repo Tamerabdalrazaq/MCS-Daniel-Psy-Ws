@@ -24,7 +24,7 @@ settings <- list(
   cluster_fixations = TRUE,
   features_to_remove = c("expected", "searcharray"),
   fliter_prev_absent = TRUE,
-  test_subject = TRUE,
+  test_subject = 1,
   calc_mean_OG = FALSE
 )
 
@@ -91,7 +91,6 @@ MSC <<- mutate(MSC, hit = ifelse(OBJECT_X1 <= CURRENT_FIX_X &
 MSC <<- mutate(MSC, p_hit = ((OBJECT_X2-OBJECT_X1) * (OBJECT_Y2-OBJECT_Y1))/(im_w * im_h)
 )
 
-MSC_ORIGINAL %>% filter(CURRENT_FIX_INDEX == 6) %>% ggplot() + geom_point(aes(x=CURRENT_FIX_X, y=CURRENT_FIX_Y)) + ylim(0,800) + xlim(0,1280) 
 # ============================Clustering==================================== 
 
 
@@ -251,7 +250,7 @@ if (settings$fliter_prev_absent){
 }
 
 if (settings$test_subject){
-  MSC <- MSC %>% filter(subjectnum == 1)
+  MSC <- MSC %>% filter(subjectnum == settings$test_subject)
   # AVG_FIXATION_DF <- AVG_FIXATION_DF %>% filter(subjectnum == 1)
 }
 
@@ -521,7 +520,7 @@ MSC$DIST_FIX_1_PREV_OBJ_DOT_PRODUCT <- Map(
       warning("Multiple matches for subjectnum")
       return(NA)
     }
-    obj_center = c(x1+x2, y1+y2)/2
+    obj_center = get_diff_vector(c(x1+x2, y1+y2)/2, CENTER)
     FIX_VECTORS <- PREV_CURR_ABSENT_FIX_VECTORS$FIX_1_VECTOR[[idx]]
     products <- numeric(length(FIX_VECTORS))
     for (i in seq_along(FIX_VECTORS)) {
@@ -551,7 +550,7 @@ MSC$DIST_FIX_2_PREV_OBJ_DOT_PRODUCT <- Map(
       warning("Multiple matches for subjectnum")
       return(NA)
     }
-    obj_center = c(x1+x2, y1+y2)/2
+    obj_center = get_diff_vector(c(x1+x2, y1+y2)/2, CENTER)
     FIX_VECTORS <- PREV_CURR_ABSENT_FIX_VECTORS$FIX_2_VECTOR[[idx]]
     products <- numeric(length(FIX_VECTORS))
     for (i in seq_along(FIX_VECTORS)) {
@@ -581,7 +580,7 @@ MSC$DIST_FIX_3_PREV_OBJ_DOT_PRODUCT <- Map(
       warning("Multiple matches for subjectnum")
       return(NA)
     }
-    obj_center = c(x1+x2, y1+y2)/2
+    obj_center = get_diff_vector(c(x1+x2, y1+y2)/2, CENTER)
     FIX_VECTORS <- PREV_CURR_ABSENT_FIX_VECTORS$FIX_3_VECTOR[[idx]]
     products <- numeric(length(FIX_VECTORS))
     for (i in seq_along(FIX_VECTORS)) {
@@ -686,23 +685,38 @@ mean(MSC$AVG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT, na.rm = TRUE)
 mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_4, na.rm = TRUE)
 
 mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_5, na.rm = TRUE)
+# 
+# mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_6, na.rm = TRUE)
+# 
+# mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_7, na.rm = TRUE)
+# 
+# mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_8, na.rm = TRUE)
 
-mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_6, na.rm = TRUE)
-
-mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_7, na.rm = TRUE)
-
-mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_8, na.rm = TRUE)
-
-mean(MSC$MEAN_OG_DISTANCE, na.rm = TRUE)
-mean(MSC$CENTER_OG_DISTANCE, na.rm = TRUE)
-mean(MSC$AVG_FIX_1_PREV_OG_DISTANCE, na.rm = TRUE)
-mean(MSC$AVG_FIX_2_PREV_OG_DISTANCE, na.rm = TRUE)
-mean(MSC$AVG_FIX_3_PREV_OG_DISTANCE, na.rm = TRUE)
-mean(MSC$AVG_FIX_4_PREV_OG_DISTANCE, na.rm = TRUE)
+# mean(MSC$MEAN_OG_DISTANCE, na.rm = TRUE)
+# mean(MSC$CENTER_OG_DISTANCE, na.rm = TRUE)
+# mean(MSC$AVG_FIX_1_PREV_OG_DISTANCE, na.rm = TRUE)
+# mean(MSC$AVG_FIX_2_PREV_OG_DISTANCE, na.rm = TRUE)
+# mean(MSC$AVG_FIX_3_PREV_OG_DISTANCE, na.rm = TRUE)
+# mean(MSC$AVG_FIX_4_PREV_OG_DISTANCE, na.rm = TRUE)
 
 
 MSC_DOT_PRODUCTS <- MSC[, c("PREV_OBJ_FIX_DOT_PRODUCT_1", "AVG_DIST_FIX_1_PREV_OBJ_DOT_PRODUCT","PREV_OBJ_FIX_DOT_PRODUCT_2", "AVG_DIST_FIX_2_PREV_OBJ_DOT_PRODUCT", "PREV_OBJ_FIX_DOT_PRODUCT_3", "AVG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT")]
 
+
+# Draw subject fixation i distribution
+vec_list <- PREV_CURR_ABSENT_FIX_VECTORS$FIX_2_VECTOR[[settings$test_subject]]
+coords <- do.call(rbind, vec_list)
+
+# Base plot on XY plane
+plot(
+  coords[,1], coords[,2],
+  xlab = "X", ylab = "Y",
+  main = "2D Vectors on XY Plane!",
+  xlim = c(-180, 180),  # add some padding
+  ylim = c(-180, 180),
+  pch = 19, col = "blue", asp = 1
+)
+arrows(0, 0, coords[,1], coords[,2], length = 0.1, col = "red")
 
 # MSC$diff <- -MSC$PREV_ORTHOGONAL_DISTANCE_2 + MSC$MEAN_OG_DISTANCE  
 # MSC %>% ggplot() + geom_point(aes(x=CENTER_OG_DISTANCE, y=diff))
@@ -715,10 +729,5 @@ MSC_DOT_PRODUCTS <- MSC[, c("PREV_OBJ_FIX_DOT_PRODUCT_1", "AVG_DIST_FIX_1_PREV_O
 
 
 # Meeting 2.4.25
-# New baseline: 
-#1 Calculate the distribution of each subject for the i-th fixation angle - similar to avg_fix_i_OG_distance but with different measure and replacing the avg with a distribution
 #2 Taking image pairs XY, seeing across subjects where they tend to look?? 
 
-
-#fix dot vector baseline  issue:
-# datastructures problem - list of list of vector -> list of vector
