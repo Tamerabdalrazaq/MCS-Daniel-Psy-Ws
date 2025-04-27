@@ -88,8 +88,8 @@ MSC <<- mutate(MSC, hit = ifelse(OBJECT_X1 <= CURRENT_FIX_X &
                                    OBJECT_Y2 >= CURRENT_FIX_Y
                                  , 1, 0))
 
-MSC <<- mutate(MSC, p_hit = ((OBJECT_X2-OBJECT_X1) * (OBJECT_Y2-OBJECT_Y1))/(im_w * im_h)
-)
+# MSC <<- mutate(MSC, p_hit = ((OBJECT_X2-OBJECT_X1) * (OBJECT_Y2-OBJECT_Y1))/(im_w * im_h)
+# )
 
 # ============================Clustering==================================== 
 
@@ -118,7 +118,7 @@ if (settings$cluster_fixations){
       OBJECT_Y2 = first(OBJECT_Y2),
       confidence = first(confidence),
       hit = list(hit),
-      p_hit = first(p_hit),
+      # p_hit = first(p_hit),
       # prev_hit = first(prev_hit),
       LAST_BUTTON_PRESSED = first(LAST_BUTTON_PRESSED),
     )
@@ -138,7 +138,7 @@ MSC <- MSC %>%
 MSC <- MSC %>%
   mutate(
     #p_prev_hit1 = lag(p_hit, default = NA),
-    p_prev_obj_hit = ((PREV_OBJ_X2-PREV_OBJ_X1) * (PREV_OBJ_Y2-PREV_OBJ_Y1))/(im_w * im_h),
+    # p_prev_obj_hit = ((PREV_OBJ_X2-PREV_OBJ_X1) * (PREV_OBJ_Y2-PREV_OBJ_Y1))/(im_w * im_h),
     prev_condition = lag(condition, default = NA)
   )
 
@@ -153,11 +153,50 @@ calc_hit <- function(FIX_X, FIX_Y, PREV_X1, PREV_Y1, PREV_X2, PREV_Y2) {
   return(ifelse(PREV_X1 <= FIX_X & PREV_Y1 <= FIX_Y & PREV_X2 >= FIX_X & PREV_Y2 >= FIX_Y, 1, 0))
 }
 
-# prev_hit
-MSC$prev_hit <- mapply(function(x1, x2, x3, x4, x5, x6) calc_hit(x1, x2, x3, x4, x5, x6),
-                       MSC$CURRENT_FIX_X, MSC$CURRENT_FIX_Y, MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
-                       MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2, SIMPLIFY = FALSE)
+# # prev_hit
+# MSC$prev_hit <- mapply(function(x1, x2, x3, x4, x5, x6) calc_hit(x1, x2, x3, x4, x5, x6),
+#                        MSC$CURRENT_FIX_X, MSC$CURRENT_FIX_Y, MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
+#                        MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2, SIMPLIFY = FALSE)
 
+IMAGES_DF <- MSC %>%
+  group_by(img_name) %>%
+  summarise(
+    FIXATIONS_X = {
+      # Get all vectors in current group
+      vectors <- CURRENT_FIX_X
+      max_len <- max(lengths(vectors))
+      
+      # Create matrix with proper dimensions
+      mat <- matrix(nrow = length(vectors), ncol = max_len)
+      
+      # Fill matrix row by row
+      for (i in seq_along(vectors)) {
+        vec <- vectors[[i]]
+        mat[i, 1:length(vec)] <- vec
+      }
+      
+      # Return as list to preserve matrix structure
+      list(mat)
+    },
+    FIXATIONS_Y = {
+      # Get all vectors in current group
+      vectors <- CURRENT_FIX_Y
+      max_len <- max(lengths(vectors))
+      
+      # Create matrix with proper dimensions
+      mat <- matrix(nrow = length(vectors), ncol = max_len)
+      
+      # Fill matrix row by row
+      for (i in seq_along(vectors)) {
+        vec <- vectors[[i]]
+        mat[i, 1:length(vec)] <- vec
+      }
+      
+      # Return as list to preserve matrix structure
+      list(mat)
+    },
+    .groups = "drop"
+  )
 
 # =========================Filter Data=======================================
 # Filter incorrect image detections
@@ -320,20 +359,22 @@ calc_orthogonal_distances <- function(X, Y, x1, y1, x2, y2) {
   return(distances)
 }
 
-# Apply the function to the MSC dataset
-MSC <- MSC %>%
-  mutate(
-    PREV_ORTHOGONAL_DISTANCE = ifelse(
-      !is.na(PREV_OBJ_X1) & !is.na(PREV_OBJ_Y1) & !is.na(PREV_OBJ_X2) & !is.na(PREV_OBJ_Y2),
-      mapply(
-        calc_orthogonal_distances,
-        CURRENT_FIX_X, CURRENT_FIX_Y,
-        PREV_OBJ_X1, PREV_OBJ_Y1, PREV_OBJ_X2, PREV_OBJ_Y2
-      ),
-      NA  # Assign NA if any required column has NA
+if(settings$calc_mean_OG){
+  # Apply the function to the MSC dataset
+  MSC <- MSC %>%
+    mutate(
+      PREV_ORTHOGONAL_DISTANCE = ifelse(
+        !is.na(PREV_OBJ_X1) & !is.na(PREV_OBJ_Y1) & !is.na(PREV_OBJ_X2) & !is.na(PREV_OBJ_Y2),
+        mapply(
+          calc_orthogonal_distances,
+          CURRENT_FIX_X, CURRENT_FIX_Y,
+          PREV_OBJ_X1, PREV_OBJ_Y1, PREV_OBJ_X2, PREV_OBJ_Y2
+        ),
+        NA  # Assign NA if any required column has NA
+      )
+      
     )
-    
-  )
+}
 
 
 # ============================Vector Difference Dot Product==================================== 
@@ -371,6 +412,11 @@ calc_dot_product <- function(v1, v2, normalize = TRUE, max_norm = NULL) {
   return(sum(v1 * v2))
 }
 
+measure_dot_product <- function(v1, v2) {
+  return (calc_dot_product(v1, v2,
+                           normalize = TRUE, max_norm = NULL))
+}
+
 get_curr_fix_prev_obj_dot_product <- function(FIX_X, FIX_Y, obj_x1, obj_y1, obj_x2, obj_y2){
   products <- numeric(length(FIX_X))
   obj_center <- c(obj_x1+obj_x2, obj_y1+obj_y2)/2
@@ -379,8 +425,7 @@ get_curr_fix_prev_obj_dot_product <- function(FIX_X, FIX_Y, obj_x1, obj_y1, obj_
   # Iterate over the elements of X and Y
   for (i in seq_along(FIX_X)) {
     fix_vector <- get_diff_vector(c(FIX_X[i], FIX_Y[i]), CENTER)
-    products[i] <- calc_dot_product(obj_vector, fix_vector,
-                                    normalize = TRUE, max_norm = NULL)
+    products[i] <- measure_dot_product(obj_vector, fix_vector)
   }
   
   # Return the list of distances
@@ -428,87 +473,87 @@ if (settings$calc_mean_OG) {
                                MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
                                MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2)
 
+
+
+
+  # Calculate the OG distance between center and  the * previous * detection
+  MSC$CENTER_OG_DISTANCE <- mapply(calc_orthogonal_distance,
+                                 DISPLAY_W/2, DISPLAY_H/2,
+                                 MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
+                                 MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2)
+  
+  
+  
+  # Calculate the OG distance between a specific fixation mean and  the * previous * detection
+  
+  # For previous absent
+  MSC$AVG_FIX_1_PREV_OG_DISTANCE <- mapply(
+    function(subj, x1, y1, x2, y2) {
+      idx <- which(PREV_ABSENT_FIX_AVG$subjectnum == subj)
+      if (length(idx) == 0) return(NA)
+  
+      fix_x <- PREV_ABSENT_FIX_AVG$FIX_1_X[idx]
+      fix_y <- PREV_ABSENT_FIX_AVG$FIX_1_Y[idx]
+  
+      calc_orthogonal_distance(fix_x, fix_y, x1, y1, x2, y2)
+    },
+    MSC$subjectnum,
+    MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
+    MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
+  )
+  # For previous absent
+  MSC$AVG_FIX_2_PREV_OG_DISTANCE <- mapply(
+    function(subj, x1, y1, x2, y2) {
+      idx <- which(PREV_ABSENT_FIX_AVG$subjectnum == subj)
+      if (length(idx) == 0) return(NA)
+  
+      fix_x <- PREV_ABSENT_FIX_AVG$FIX_2_X[idx]
+      fix_y <- PREV_ABSENT_FIX_AVG$FIX_2_Y[idx]
+  
+      calc_orthogonal_distance(fix_x, fix_y, x1, y1, x2, y2)
+    },
+    MSC$subjectnum,
+    MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
+    MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
+  )
+  
+  MSC$AVG_FIX_3_PREV_OG_DISTANCE <- mapply(
+    function(subj, x1, y1, x2, y2) {
+      idx <- which(PREV_ABSENT_FIX_AVG$subjectnum == subj)
+      if (length(idx) == 0) return(NA)
+  
+      fix_x <- PREV_ABSENT_FIX_AVG$FIX_3_X[idx]
+      fix_y <- PREV_ABSENT_FIX_AVG$FIX_3_Y[idx]
+  
+      calc_orthogonal_distance(fix_x, fix_y, x1, y1, x2, y2)
+    },
+    MSC$subjectnum,
+    MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
+    MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
+  )
+  
+  MSC$AVG_FIX_4_PREV_OG_DISTANCE <- mapply(
+    function(subj, x1, y1, x2, y2) {
+      idx <- which(PREV_ABSENT_FIX_AVG$subjectnum == subj)
+      if (length(idx) == 0) return(NA)
+  
+      fix_x <- PREV_ABSENT_FIX_AVG$FIX_4_X[idx]
+      fix_y <- PREV_ABSENT_FIX_AVG$FIX_4_Y[idx]
+  
+      calc_orthogonal_distance(fix_x, fix_y, x1, y1, x2, y2)
+    },
+    MSC$subjectnum,
+    MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
+    MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
+  )
+
 }
 
 
-# Calculate the OG distance between center and  the * previous * detection
-MSC$CENTER_OG_DISTANCE <- mapply(calc_orthogonal_distance,
-                               DISPLAY_W/2, DISPLAY_H/2,
-                               MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
-                               MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2)
 
 
 
-# Calculate the OG distance between a specific fixation mean and  the * previous * detection
-
-# For previous absent
-MSC$AVG_FIX_1_PREV_OG_DISTANCE <- mapply(
-  function(subj, x1, y1, x2, y2) {
-    idx <- which(PREV_ABSENT_FIX_AVG$subjectnum == subj)
-    if (length(idx) == 0) return(NA)
-
-    fix_x <- PREV_ABSENT_FIX_AVG$FIX_1_X[idx]
-    fix_y <- PREV_ABSENT_FIX_AVG$FIX_1_Y[idx]
-
-    calc_orthogonal_distance(fix_x, fix_y, x1, y1, x2, y2)
-  },
-  MSC$subjectnum,
-  MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
-  MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
-)
-# For previous absent
-MSC$AVG_FIX_2_PREV_OG_DISTANCE <- mapply(
-  function(subj, x1, y1, x2, y2) {
-    idx <- which(PREV_ABSENT_FIX_AVG$subjectnum == subj)
-    if (length(idx) == 0) return(NA)
-
-    fix_x <- PREV_ABSENT_FIX_AVG$FIX_2_X[idx]
-    fix_y <- PREV_ABSENT_FIX_AVG$FIX_2_Y[idx]
-
-    calc_orthogonal_distance(fix_x, fix_y, x1, y1, x2, y2)
-  },
-  MSC$subjectnum,
-  MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
-  MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
-)
-
-MSC$AVG_FIX_3_PREV_OG_DISTANCE <- mapply(
-  function(subj, x1, y1, x2, y2) {
-    idx <- which(PREV_ABSENT_FIX_AVG$subjectnum == subj)
-    if (length(idx) == 0) return(NA)
-
-    fix_x <- PREV_ABSENT_FIX_AVG$FIX_3_X[idx]
-    fix_y <- PREV_ABSENT_FIX_AVG$FIX_3_Y[idx]
-
-    calc_orthogonal_distance(fix_x, fix_y, x1, y1, x2, y2)
-  },
-  MSC$subjectnum,
-  MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
-  MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
-)
-
-MSC$AVG_FIX_4_PREV_OG_DISTANCE <- mapply(
-  function(subj, x1, y1, x2, y2) {
-    idx <- which(PREV_ABSENT_FIX_AVG$subjectnum == subj)
-    if (length(idx) == 0) return(NA)
-
-    fix_x <- PREV_ABSENT_FIX_AVG$FIX_4_X[idx]
-    fix_y <- PREV_ABSENT_FIX_AVG$FIX_4_Y[idx]
-
-    calc_orthogonal_distance(fix_x, fix_y, x1, y1, x2, y2)
-  },
-  MSC$subjectnum,
-  MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
-  MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
-)
-
-
-
-
-
-
-
-#####=== Baseline for dot product vector difference===#####
+#####=== Subject-Based Baseline for dot product vector difference===#####
 MSC$DIST_FIX_1_PREV_OBJ_DOT_PRODUCT <- Map(
   function(subj, x1, y1, x2, y2) {
     idx <- which(PREV_CURR_ABSENT_FIX_VECTORS$subjectnum == subj)
@@ -524,8 +569,7 @@ MSC$DIST_FIX_1_PREV_OBJ_DOT_PRODUCT <- Map(
     FIX_VECTORS <- PREV_CURR_ABSENT_FIX_VECTORS$FIX_1_VECTOR[[idx]]
     products <- numeric(length(FIX_VECTORS))
     for (i in seq_along(FIX_VECTORS)) {
-      product = calc_dot_product(FIX_VECTORS[[i]], obj_center, 
-                                 normalize = TRUE, max_norm = NULL)
+      product = measure_dot_product(FIX_VECTORS[[i]], obj_center)
       products[i] = product
     }
     return(products)
@@ -554,8 +598,7 @@ MSC$DIST_FIX_2_PREV_OBJ_DOT_PRODUCT <- Map(
     FIX_VECTORS <- PREV_CURR_ABSENT_FIX_VECTORS$FIX_2_VECTOR[[idx]]
     products <- numeric(length(FIX_VECTORS))
     for (i in seq_along(FIX_VECTORS)) {
-      product = calc_dot_product(FIX_VECTORS[[i]], obj_center,
-                                 normalize = TRUE, max_norm = NULL)
+      product = measure_dot_product(FIX_VECTORS[[i]], obj_center)
       products[i] = product
     }
     return(products)
@@ -584,8 +627,7 @@ MSC$DIST_FIX_3_PREV_OBJ_DOT_PRODUCT <- Map(
     FIX_VECTORS <- PREV_CURR_ABSENT_FIX_VECTORS$FIX_3_VECTOR[[idx]]
     products <- numeric(length(FIX_VECTORS))
     for (i in seq_along(FIX_VECTORS)) {
-      product = calc_dot_product(FIX_VECTORS[[i]], obj_center, 
-                                 normalize = TRUE, max_norm = NULL)
+      product = measure_dot_product(FIX_VECTORS[[i]], obj_center)
       products[i] = product
     }
     return(products)
@@ -597,6 +639,117 @@ MSC$DIST_FIX_3_PREV_OBJ_DOT_PRODUCT <- Map(
 
 MSC <- MSC %>%
   mutate(AVG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT = sapply(DIST_FIX_3_PREV_OBJ_DOT_PRODUCT, mean, na.rm = TRUE))
+
+#####=== Image-Based Baseline for dot product vector difference===#####
+# MSC$CURR_IMG_DIST_FIX_1_PREV_OBJ_DOT_PRODUCT <- Map(
+#   function(img_name, x1, y1, x2, y2) {
+#     FIX_NUM = 1
+#     idx <- which(IMAGES_DF$img_name == img_name)
+#     if (length(idx) == 0) {
+#       warning("No match for img_name")
+#       return(NA)
+#     }
+#     if (length(idx) > 1) {
+#       warning("Multiple matches for img_name")
+#       return(NA)
+#     }
+#     obj_center = get_diff_vector(c(x1+x2, y1+y2)/2, CENTER)
+#     FIXATIONS_X <- IMAGES_DF$FIXATIONS_X[[idx]]
+#     FIXATIONS_Y <- IMAGES_DF$FIXATIONS_Y[[idx]]
+#     if(!length(FIXATIONS_X)==length(FIXATIONS_Y)){
+#       stop(("invalid lengths @ image-based baseline"))
+#     }
+#     n_trials = nrow(FIXATIONS_X)
+#     products <- numeric(length(n_trials))
+#     for (i in 1:n_trials) {
+#       fix_i_x <- FIXATIONS_X[, FIX_NUM]
+#       fix_i_y <- FIXATIONS_Y[, FIX_NUM]
+#       product = measure_dot_product(c(fix_i_x[i], fix_i_x[i]), obj_center)
+#       products[i] = product
+#     }
+#     return(products)
+#   },
+#   MSC$img_name,
+#   MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
+#   MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
+# )
+
+
+# First determine number of fixations (columns in your matrices)
+n_fixations <- 4
+
+# Create a function that calculates dot products for a specific fixation number
+calculate_dot_products <- function(fix_num) {
+  Map(
+    function(img_name, x1, y1, x2, y2) {
+      idx <- which(IMAGES_DF$img_name == img_name)
+      if (length(idx) == 0) {
+        warning("No match for img_name: ", img_name)
+        return(NA)
+      }
+      if (length(idx) > 1) {
+        warning("Multiple matches for img_name: ", img_name)
+        return(NA)
+      }
+      
+      obj_center <- get_diff_vector(c(x1 + x2, y1 + y2)/2, CENTER)
+      FIXATIONS_X <- IMAGES_DF$FIXATIONS_X[[idx]]
+      FIXATIONS_Y <- IMAGES_DF$FIXATIONS_Y[[idx]]
+      
+      
+      if (!length(FIXATIONS_X) == length(FIXATIONS_Y)) {
+        stop("invalid lengths @ image-based baseline")
+      }
+      
+      n_trials <- nrow(FIXATIONS_X)
+      n_fixations_curr <- ncol(FIXATIONS_X)
+      products <- numeric(n_trials)
+      
+      if(n_fixations_curr < fix_num){
+        return(NA)
+      }
+      
+      if(img_name == "443875.jpg"){
+        print("fix_num")
+        print(fix_num)
+        print("FIXATIONS_X")
+        print(FIXATIONS_X)
+        print("FIXATIONS_Y")
+        print(FIXATIONS_Y)
+      }
+      
+      
+      for (i in 1:n_trials) {
+        fix_i_x <- FIXATIONS_X[i, fix_num]  # Get specific fixation for this trial
+        fix_i_y <- FIXATIONS_Y[i, fix_num]
+        fix_vector <- get_diff_vector(c(fix_i_x,fix_i_y), CENTER)
+        if(img_name == "443875.jpg"){
+          print("fix_i_x <- FIXATIONS_X[i, fix_num]")
+          print(fix_i_x <- FIXATIONS_X[i, fix_num])
+          print("fix_i_y <- FIXATIONS_Y[i, fix_num]")
+          print(fix_i_y <- FIXATIONS_Y[i, fix_num])
+        }
+        products[i] <- measure_dot_product(c(fix_i_x, fix_i_y), obj_center)
+      }
+      
+      return(products)
+    },
+    MSC$img_name,
+    MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
+    MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
+  )
+}
+
+for (i in 1:n_fixations) {
+  col_name <- paste0("CURR_IMG_DIST_FIX_", i, "_PREV_OBJ_DOT_PRODUCT")
+  avg_col_name <- paste0("AVG_CURR_IMG_DIST_FIX_", i, "_PREV_OBJ_DOT_PRODUCT")
+  # Calculate dot products for current fixation
+  MSC[[col_name]] <- calculate_dot_products(i)
+  
+  # Calculate mean for each list element in the column
+  MSC[[avg_col_name]] <- sapply(MSC[[col_name]], function(x) mean(unlist(x), na.rm = TRUE))
+}
+
 
 # ============================Analysis==================================== 
 
