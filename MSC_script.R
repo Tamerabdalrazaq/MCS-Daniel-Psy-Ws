@@ -729,7 +729,7 @@ calculate_dot_products <- function(fix_num) {
           print("fix_i_y <- FIXATIONS_Y[i, fix_num]")
           print(fix_i_y <- FIXATIONS_Y[i, fix_num])
         }
-        products[i] <- measure_dot_product(c(fix_i_x, fix_i_y), obj_center)
+        products[i] <- measure_dot_product(fix_vector, obj_center)
       }
       
       return(products)
@@ -749,6 +749,7 @@ for (i in 1:n_fixations) {
   # Calculate mean for each list element in the column
   MSC[[avg_col_name]] <- sapply(MSC[[col_name]], function(x) mean(unlist(x), na.rm = TRUE))
 }
+
 
 
 # ============================Analysis==================================== 
@@ -828,16 +829,22 @@ MSC <- MSC%>%mutate(
 
 mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_1, na.rm = TRUE)
 mean(MSC$AVG_DIST_FIX_1_PREV_OBJ_DOT_PRODUCT, na.rm = TRUE)
+mean(MSC$AVG_CURR_IMG_DIST_FIX_1_PREV_OBJ_DOT_PRODUCT, na.rm = TRUE)
 
 mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_2, na.rm = TRUE)
 mean(MSC$AVG_DIST_FIX_2_PREV_OBJ_DOT_PRODUCT, na.rm = TRUE)
+mean(MSC$AVG_CURR_IMG_DIST_FIX_2_PREV_OBJ_DOT_PRODUCT, na.rm = TRUE)
 
 mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_3, na.rm = TRUE)
 mean(MSC$AVG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT, na.rm = TRUE)
+mean(MSC$AVG_CURR_IMG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT, na.rm = TRUE)
 
 mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_4, na.rm = TRUE)
+mean(MSC$AVG_CURR_IMG_DIST_FIX_4_PREV_OBJ_DOT_PRODUCT, na.rm = TRUE)
 
 mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_5, na.rm = TRUE)
+mean(MSC$AVG_CURR_IMG_DIST_FIX_5_PREV_OBJ_DOT_PRODUCT, na.rm = TRUE)
+
 # 
 # mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_6, na.rm = TRUE)
 # 
