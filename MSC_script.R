@@ -195,6 +195,7 @@ IMAGES_DF <- MSC %>%
       # Return as list to preserve matrix structure
       list(mat)
     },
+    subjectnum = list(subjectnum),
     .groups = "drop"
   )
 
@@ -676,12 +677,12 @@ MSC <- MSC %>%
 
 
 # First determine number of fixations (columns in your matrices)
-n_fixations <- 4
+n_fixations <- 8
 
 # Create a function that calculates dot products for a specific fixation number
 calculate_dot_products <- function(fix_num) {
   Map(
-    function(img_name, x1, y1, x2, y2) {
+    function(subjectnum, img_name, x1, y1, x2, y2) {
       idx <- which(IMAGES_DF$img_name == img_name)
       if (length(idx) == 0) {
         warning("No match for img_name: ", img_name)
@@ -697,7 +698,9 @@ calculate_dot_products <- function(fix_num) {
       FIXATIONS_Y <- IMAGES_DF$FIXATIONS_Y[[idx]]
       
       
-      if (!length(FIXATIONS_X) == length(FIXATIONS_Y)) {
+      if (!(length(FIXATIONS_X) == length(FIXATIONS_Y))) {
+        print(length(FIXATIONS_X))
+        print(length(FIXATIONS_Y))
         stop("invalid lengths @ image-based baseline")
       }
       
@@ -709,31 +712,21 @@ calculate_dot_products <- function(fix_num) {
         return(NA)
       }
       
-      if(img_name == "443875.jpg"){
-        print("fix_num")
-        print(fix_num)
-        print("FIXATIONS_X")
-        print(FIXATIONS_X)
-        print("FIXATIONS_Y")
-        print(FIXATIONS_Y)
-      }
-      
       
       for (i in 1:n_trials) {
+        if(IMAGES_DF$subjectnum[[idx]][i] == subjectnum){
+          products[i] <- NA
+          next;
+        }
         fix_i_x <- FIXATIONS_X[i, fix_num]  # Get specific fixation for this trial
         fix_i_y <- FIXATIONS_Y[i, fix_num]
         fix_vector <- get_diff_vector(c(fix_i_x,fix_i_y), CENTER)
-        if(img_name == "443875.jpg"){
-          print("fix_i_x <- FIXATIONS_X[i, fix_num]")
-          print(fix_i_x <- FIXATIONS_X[i, fix_num])
-          print("fix_i_y <- FIXATIONS_Y[i, fix_num]")
-          print(fix_i_y <- FIXATIONS_Y[i, fix_num])
-        }
         products[i] <- measure_dot_product(fix_vector, obj_center)
       }
       
       return(products)
     },
+    MSC$subjectnum,
     MSC$img_name,
     MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
     MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
@@ -864,7 +857,7 @@ MSC_DOT_PRODUCTS <- MSC[, c("PREV_OBJ_FIX_DOT_PRODUCT_1", "AVG_DIST_FIX_1_PREV_O
 
 
 # Draw subject fixation i distribution
-vec_list <- PREV_CURR_ABSENT_FIX_VECTORS$FIX_2_VECTOR[[settings$test_subject]]
+vec_list <- PREV_CURR_ABSENT_FIX_VECTORS$FIX_3_VECTOR[[settings$test_subject]]
 coords <- do.call(rbind, vec_list)
 
 # Base plot on XY plane
@@ -881,7 +874,7 @@ arrows(0, 0, coords[,1], coords[,2], length = 0.1, col = "red")
 # MSC$diff <- -MSC$PREV_ORTHOGONAL_DISTANCE_2 + MSC$MEAN_OG_DISTANCE  
 # MSC %>% ggplot() + geom_point(aes(x=CENTER_OG_DISTANCE, y=diff))
 
-# write.csv(MSC[, c("PREV_ORTHOGONAL_DISTANCE_2", "CENTER_OG_DISTANCE", "MEAN_OG_DISTANCE", "AVG_FIX_OG_DISTANCE")], file = "MUTATED_MSC.csv")
+write.csv(MSC[, c("AVG_CURR_IMG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT", "PREV_OBJ_FIX_DOT_PRODUCT_3", "AVG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT")], file = "dot_products.csv")
 # write.csv(MSC[, c("PREV_ORTHOGONAL_DISTANCE_2", "CENTER_OG_DISTANCE", "MEAN_OG_DISTANCE", "AVG_FIX_OG_DISTANCE")], file = "MUTATED_MSC.csv")
 # write_json(MSC, "__data.json", pretty = TRUE)
 
