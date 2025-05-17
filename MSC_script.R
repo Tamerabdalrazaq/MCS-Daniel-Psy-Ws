@@ -20,6 +20,8 @@ MSC_ORIGINAL <- MSC
 # Define script settings
 settings <- list(
   filter_bad_detections = TRUE,
+  prev_condition = "present",
+  curr_condition = "absent",
   filter_inconsecutive_trial = TRUE,
   cluster_fixations = TRUE,
   features_to_remove = c("expected", "searcharray"),
@@ -220,10 +222,15 @@ if (settings$filter_inconsecutive_trial){
 
 ### Prev absent DF for baseline
 
-PREV_CURR_ABSENT_DF <- MSC %>%
-  filter(prev_condition == "absent" & condition == "absent")
+# MODIFIED!!!!!!!!!!!!!!!
 
-N <- 6  # Change this to your desired number
+PREV_CURR_ABSENT_DF <- MSC %>%
+  filter(prev_condition == settings$prev_condition & 
+           condition == settings$curr_condition)
+
+# MODIFIED!!!!!!!!!!!!!!!
+
+N <- 8
 
 # Extract fixation coordinates dynamically
 for (i in seq_len(N)) {
@@ -231,18 +238,14 @@ for (i in seq_len(N)) {
   PREV_CURR_ABSENT_DF[[paste0("FIX_", i, "_Y")]] <- sapply(PREV_CURR_ABSENT_DF$CURRENT_FIX_Y, function(x) x[i])
 }
 
-# PREV_CURR_ABSENT_DF$FIX_1_VECTOR <- mapply(
-#   function(c1, c2) c(c1 - DISPLAY_W/2, c2 - DISPLAY_H/2),
-#   PREV_CURR_ABSENT_DF$FIX_1_X, PREV_CURR_ABSENT_DF$FIX_1_Y, SIMPLIFY = FALSE)
 
-N <- 5  # <-- change this to your actual N
-
-# Loop through each i and compute the corresponding FIX_i_VECTOR
 get_diff_vector <- function(coords, origin) {
   # coords: a vector of length 2, c(c1, c2)
   # origin: a vector of length 2, c(DISPLAY_W, DISPLAY_H)
   
   if (length(coords) != 2 || length(origin) != 2) {
+    print(coords)
+    print(origin)
     stop("Both 'coords' and 'origin' must be numeric vectors of length 2.")
   }
   
@@ -279,6 +282,9 @@ PREV_CURR_ABSENT_FIX_VECTORS <- PREV_CURR_ABSENT_DF %>%
     FIX_3_VECTOR = list(FIX_3_VECTOR),
     FIX_4_VECTOR = list(FIX_4_VECTOR),
     FIX_5_VECTOR = list(FIX_5_VECTOR),
+    FIX_6_VECTOR = list(FIX_6_VECTOR),
+    FIX_7_VECTOR = list(FIX_7_VECTOR),
+    FIX_8_VECTOR = list(FIX_8_VECTOR),
   )
 
 
@@ -286,7 +292,8 @@ PREV_CURR_ABSENT_FIX_VECTORS <- PREV_CURR_ABSENT_DF %>%
 # CONTINUE FILTER ###############
 
 if (settings$fliter_prev_absent){
-  MSC <- MSC %>% filter(prev_condition == "present")
+  MSC <- MSC %>% filter(prev_condition == settings$prev_condition &
+                          condition == settings$curr_condition)
 }
 
 if (settings$test_subject){
@@ -360,22 +367,20 @@ calc_orthogonal_distances <- function(X, Y, x1, y1, x2, y2) {
   return(distances)
 }
 
-if(settings$calc_mean_OG){
-  # Apply the function to the MSC dataset
-  MSC <- MSC %>%
-    mutate(
-      PREV_ORTHOGONAL_DISTANCE = ifelse(
-        !is.na(PREV_OBJ_X1) & !is.na(PREV_OBJ_Y1) & !is.na(PREV_OBJ_X2) & !is.na(PREV_OBJ_Y2),
-        mapply(
-          calc_orthogonal_distances,
-          CURRENT_FIX_X, CURRENT_FIX_Y,
-          PREV_OBJ_X1, PREV_OBJ_Y1, PREV_OBJ_X2, PREV_OBJ_Y2
-        ),
-        NA  # Assign NA if any required column has NA
-      )
-      
+# Apply the function to the MSC dataset
+MSC <- MSC %>%
+  mutate(
+    PREV_ORTHOGONAL_DISTANCE = ifelse(
+      !is.na(PREV_OBJ_X1) & !is.na(PREV_OBJ_Y1) & !is.na(PREV_OBJ_X2) & !is.na(PREV_OBJ_Y2),
+      mapply(
+        calc_orthogonal_distances,
+        CURRENT_FIX_X, CURRENT_FIX_Y,
+        PREV_OBJ_X1, PREV_OBJ_Y1, PREV_OBJ_X2, PREV_OBJ_Y2
+      ),
+      NA  # Assign NA if any required column has NA
     )
-}
+    
+  )
 
 
 # ============================Vector Difference Dot Product==================================== 
@@ -414,8 +419,8 @@ calc_dot_product <- function(v1, v2, normalize = TRUE, max_norm = NULL) {
 }
 
 measure_dot_product <- function(v1, v2) {
-  return (calc_dot_product(v1, v2,
-                           normalize = TRUE, max_norm = NULL))
+    return (calc_dot_product(v1, v2,
+                             normalize = TRUE, max_norm = NULL))
 }
 
 get_curr_fix_prev_obj_dot_product <- function(FIX_X, FIX_Y, obj_x1, obj_y1, obj_x2, obj_y2){
@@ -426,7 +431,7 @@ get_curr_fix_prev_obj_dot_product <- function(FIX_X, FIX_Y, obj_x1, obj_y1, obj_
   # Iterate over the elements of X and Y
   for (i in seq_along(FIX_X)) {
     fix_vector <- get_diff_vector(c(FIX_X[i], FIX_Y[i]), CENTER)
-    products[i] <- measure_dot_product(obj_vector, fix_vector)
+    products[i] <- measure_dot_product(fix_vector, obj_vector)
   }
   
   # Return the list of distances
@@ -473,6 +478,7 @@ if (settings$calc_mean_OG) {
                                MSC$im_w, MSC$im_h,
                                MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
                                MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2)
+}
 
 
 
@@ -488,71 +494,70 @@ if (settings$calc_mean_OG) {
   # Calculate the OG distance between a specific fixation mean and  the * previous * detection
   
   # For previous absent
-  MSC$AVG_FIX_1_PREV_OG_DISTANCE <- mapply(
-    function(subj, x1, y1, x2, y2) {
-      idx <- which(PREV_ABSENT_FIX_AVG$subjectnum == subj)
-      if (length(idx) == 0) return(NA)
+  n_fixations <- 8
+  #Fix 1
   
-      fix_x <- PREV_ABSENT_FIX_AVG$FIX_1_X[idx]
-      fix_y <- PREV_ABSENT_FIX_AVG$FIX_1_Y[idx]
+  calc_dist_i_og_distance <- function(fix_num){
+    Map(
+      function(subj, x1, y1, x2, y2) {
+        idx <- which(PREV_CURR_ABSENT_FIX_VECTORS$subjectnum == subj)
+        if (length(idx) == 0) {
+          warning("No match for subjectnum")
+          return(NA)
+        }
+        if (length(idx) > 1) {
+          warning("Multiple matches for subjectnum")
+          return(NA)
+        }
+        vector_name <- paste0("FIX_", fix_num, "_VECTOR")
+        FIX_VECTORS <- PREV_CURR_ABSENT_FIX_VECTORS[[vector_name]][[idx]]
+        distances <- numeric(length(FIX_VECTORS))
+        for (i in seq_along(FIX_VECTORS)) {
+          # IMPORTANT! curr_vector is relative to the center and not absolute to the screen 
+          curr_vector = FIX_VECTORS[[i]][1] + CENTER 
+          x =  curr_vector[1]
+          y = curr_vector[2]
+          dist =calc_orthogonal_distance(x, y, x1, y1, x2, y2)
+          distances[i] = dist
+        }
+        return(distances)
+      },
+      MSC$subjectnum,
+      MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
+      MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
+    )
+    }
   
-      calc_orthogonal_distance(fix_x, fix_y, x1, y1, x2, y2)
-    },
-    MSC$subjectnum,
-    MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
-    MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
-  )
-  # For previous absent
-  MSC$AVG_FIX_2_PREV_OG_DISTANCE <- mapply(
-    function(subj, x1, y1, x2, y2) {
-      idx <- which(PREV_ABSENT_FIX_AVG$subjectnum == subj)
-      if (length(idx) == 0) return(NA)
+  for (i in 1:n_fixations) {
+    col_name <- paste0("DIST_FIX_", i, "_PREV_OBJ_OG_DISTANCE")
+    avg_col_name <- paste0("AVG_DIST_FIX_", i, "_PREV_OBJ_OG_DISTANCE")
+    # Calculate dot products for current fixation
+    MSC[[col_name]] <- calc_dist_i_og_distance(i)
+    
+    # Calculate mean for each list element in the column
+    MSC[[avg_col_name]] <- sapply(MSC[[col_name]], function(x) mean(unlist(x), na.rm = TRUE))
+  }
   
-      fix_x <- PREV_ABSENT_FIX_AVG$FIX_2_X[idx]
-      fix_y <- PREV_ABSENT_FIX_AVG$FIX_2_Y[idx]
   
-      calc_orthogonal_distance(fix_x, fix_y, x1, y1, x2, y2)
-    },
-    MSC$subjectnum,
-    MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
-    MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
-  )
-  
-  MSC$AVG_FIX_3_PREV_OG_DISTANCE <- mapply(
-    function(subj, x1, y1, x2, y2) {
-      idx <- which(PREV_ABSENT_FIX_AVG$subjectnum == subj)
-      if (length(idx) == 0) return(NA)
-  
-      fix_x <- PREV_ABSENT_FIX_AVG$FIX_3_X[idx]
-      fix_y <- PREV_ABSENT_FIX_AVG$FIX_3_Y[idx]
-  
-      calc_orthogonal_distance(fix_x, fix_y, x1, y1, x2, y2)
-    },
-    MSC$subjectnum,
-    MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
-    MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
-  )
-  
-  MSC$AVG_FIX_4_PREV_OG_DISTANCE <- mapply(
-    function(subj, x1, y1, x2, y2) {
-      idx <- which(PREV_ABSENT_FIX_AVG$subjectnum == subj)
-      if (length(idx) == 0) return(NA)
-  
-      fix_x <- PREV_ABSENT_FIX_AVG$FIX_4_X[idx]
-      fix_y <- PREV_ABSENT_FIX_AVG$FIX_4_Y[idx]
-  
-      calc_orthogonal_distance(fix_x, fix_y, x1, y1, x2, y2)
-    },
-    MSC$subjectnum,
-    MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
-    MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
-  )
+  ### Old Baseline Calculation
+  ### It is problematic because we average the fixations before the non-linear calculations
 
-}
-
-
-
-
+#   MSC$AVG_FIX_1_PREV_OG_DISTANCE <- mapply(
+#     function(subj, x1, y1, x2, y2) {
+#       idx <- which(PREV_ABSENT_FIX_AVG$subjectnum == subj)
+#       if (length(idx) == 0) return(NA)
+#       
+#       fix_x <- PREV_ABSENT_FIX_AVG$FIX_1_X[idx]
+#       fix_y <- PREV_ABSENT_FIX_AVG$FIX_1_Y[idx]
+#       
+#       calc_orthogonal_distance(fix_x, fix_y, x1, y1, x2, y2)
+#     },
+#     MSC$subjectnum,
+#     MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
+#     MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
+#   )
+#   
+# 
 
 #####=== Subject-Based Baseline for dot product vector difference===#####
 MSC$DIST_FIX_1_PREV_OBJ_DOT_PRODUCT <- Map(
@@ -642,39 +647,6 @@ MSC <- MSC %>%
   mutate(AVG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT = sapply(DIST_FIX_3_PREV_OBJ_DOT_PRODUCT, mean, na.rm = TRUE))
 
 #####=== Image-Based Baseline for dot product vector difference===#####
-# MSC$CURR_IMG_DIST_FIX_1_PREV_OBJ_DOT_PRODUCT <- Map(
-#   function(img_name, x1, y1, x2, y2) {
-#     FIX_NUM = 1
-#     idx <- which(IMAGES_DF$img_name == img_name)
-#     if (length(idx) == 0) {
-#       warning("No match for img_name")
-#       return(NA)
-#     }
-#     if (length(idx) > 1) {
-#       warning("Multiple matches for img_name")
-#       return(NA)
-#     }
-#     obj_center = get_diff_vector(c(x1+x2, y1+y2)/2, CENTER)
-#     FIXATIONS_X <- IMAGES_DF$FIXATIONS_X[[idx]]
-#     FIXATIONS_Y <- IMAGES_DF$FIXATIONS_Y[[idx]]
-#     if(!length(FIXATIONS_X)==length(FIXATIONS_Y)){
-#       stop(("invalid lengths @ image-based baseline"))
-#     }
-#     n_trials = nrow(FIXATIONS_X)
-#     products <- numeric(length(n_trials))
-#     for (i in 1:n_trials) {
-#       fix_i_x <- FIXATIONS_X[, FIX_NUM]
-#       fix_i_y <- FIXATIONS_Y[, FIX_NUM]
-#       product = measure_dot_product(c(fix_i_x[i], fix_i_x[i]), obj_center)
-#       products[i] = product
-#     }
-#     return(products)
-#   },
-#   MSC$img_name,
-#   MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
-#   MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
-# )
-
 
 # First determine number of fixations (columns in your matrices)
 n_fixations <- 8
@@ -838,6 +810,46 @@ mean(MSC$AVG_CURR_IMG_DIST_FIX_4_PREV_OBJ_DOT_PRODUCT, na.rm = TRUE)
 mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_5, na.rm = TRUE)
 mean(MSC$AVG_CURR_IMG_DIST_FIX_5_PREV_OBJ_DOT_PRODUCT, na.rm = TRUE)
 
+
+
+# OG Distance Comparison
+MSC <- MSC%>%mutate(
+  PREV_ORTHOGONAL_DISTANCE_1 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[1]),
+  PREV_ORTHOGONAL_DISTANCE_2 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[2]),
+  PREV_ORTHOGONAL_DISTANCE_3 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[3]),
+  PREV_ORTHOGONAL_DISTANCE_4 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[4]),
+  PREV_ORTHOGONAL_DISTANCE_5 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[5]),
+  PREV_ORTHOGONAL_DISTANCE_6 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[6]),
+  PREV_ORTHOGONAL_DISTANCE_7 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[7]),
+  PREV_ORTHOGONAL_DISTANCE_8 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[8])
+)
+
+
+mean(MSC$PREV_ORTHOGONAL_DISTANCE_1, na.rm = TRUE)
+mean(MSC$AVG_DIST_FIX_1_PREV_OBJ_OG_DISTANCE, na.rm = TRUE)
+
+mean(MSC$PREV_ORTHOGONAL_DISTANCE_2, na.rm = TRUE)
+mean(MSC$AVG_DIST_FIX_2_PREV_OBJ_OG_DISTANCE, na.rm = TRUE)
+
+mean(MSC$PREV_ORTHOGONAL_DISTANCE_3, na.rm = TRUE)
+mean(MSC$AVG_DIST_FIX_3_PREV_OBJ_OG_DISTANCE, na.rm = TRUE)
+
+mean(MSC$PREV_ORTHOGONAL_DISTANCE_4, na.rm = TRUE)
+mean(MSC$AVG_DIST_FIX_4_PREV_OBJ_OG_DISTANCE, na.rm = TRUE)
+
+mean(MSC$PREV_ORTHOGONAL_DISTANCE_5, na.rm = TRUE)
+mean(MSC$AVG_DIST_FIX_5_PREV_OBJ_OG_DISTANCE, na.rm = TRUE)
+
+mean(MSC$PREV_ORTHOGONAL_DISTANCE_6, na.rm = TRUE)
+mean(MSC$AVG_DIST_FIX_6_PREV_OBJ_OG_DISTANCE, na.rm = TRUE)
+
+mean(MSC$PREV_ORTHOGONAL_DISTANCE_7, na.rm = TRUE)
+mean(MSC$AVG_DIST_FIX_7_PREV_OBJ_OG_DISTANCE, na.rm = TRUE)
+
+mean(MSC$PREV_ORTHOGONAL_DISTANCE_8, na.rm = TRUE)
+mean(MSC$AVG_DIST_FIX_8_PREV_OBJ_OG_DISTANCE, na.rm = TRUE)
+
+
 # 
 # mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_6, na.rm = TRUE)
 # 
@@ -857,20 +869,47 @@ MSC_DOT_PRODUCTS <- MSC[, c("PREV_OBJ_FIX_DOT_PRODUCT_1", "AVG_DIST_FIX_1_PREV_O
 
 
 # Draw subject fixation i distribution
-vec_list <- PREV_CURR_ABSENT_FIX_VECTORS$FIX_3_VECTOR[[settings$test_subject]]
+vec_list <- PREV_CURR_ABSENT_FIX_VECTORS$FIX_1_VECTOR[[settings$test_subject]]
 coords <- do.call(rbind, vec_list)
 
 # Base plot on XY plane
 plot(
   coords[,1], coords[,2],
   xlab = "X", ylab = "Y",
-  main = "2D Vectors on XY Plane!",
+  main = "Subject 1 Fix 1 Distribution",
   xlim = c(-180, 180),  # add some padding
   ylim = c(-180, 180),
   pch = 19, col = "blue", asp = 1
 )
 arrows(0, 0, coords[,1], coords[,2], length = 0.1, col = "red")
 
+
+MSC <- MSC %>%
+  mutate(PO_COORDS = pmap(
+    list(PREV_OBJ_X1, PREV_OBJ_X2, PREV_OBJ_Y1, PREV_OBJ_Y2),
+    ~ c((..1 + ..2)/2, (..3 + ..4)/2)
+  ))
+
+MSC <- MSC %>%
+  mutate(
+    RESULT = map(PO_COORDS, ~ get_diff_vector(.x, CENTER))
+  )
+
+
+# Draw subject fixation i distribution
+vec_list <- MSC$RESULT
+coords <- do.call(rbind, vec_list)
+
+# Base plot on XY plane
+plot(
+  coords[,1], coords[,2],
+  xlab = "X", ylab = "Y",
+  main = "Subject 1 Images Coords Distribution",
+  xlim = c(-380, 380),  # add some padding
+  ylim = c(-250, 250),
+  pch = 19, col = "blue", asp = 1
+)
+arrows(0, 0, coords[,1], coords[,2], length = 0.1, col = "red")
 # MSC$diff <- -MSC$PREV_ORTHOGONAL_DISTANCE_2 + MSC$MEAN_OG_DISTANCE  
 # MSC %>% ggplot() + geom_point(aes(x=CENTER_OG_DISTANCE, y=diff))
 
