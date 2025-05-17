@@ -719,66 +719,6 @@ for (i in 1:n_fixations) {
 
 # ============================Analysis==================================== 
 
-# Probability analysis
-
-# MSC = MSC%>%mutate(
-#   prev_hit_1 = sapply(prev_hit, function(x) x[1]),
-#   prev_hit_2 = sapply(prev_hit, function(x) x[2]),
-#   prev_hit_3 = sapply(prev_hit, function(x) x[3]),
-#   prev_hit_4 = sapply(prev_hit, function(x) x[4]),
-#   prev_hit_5 = sapply(prev_hit, function(x) x[5]),
-#   prev_hit_6 = sapply(prev_hit, function(x) x[6]),
-#   prev_hit_7 = sapply(prev_hit, function(x) x[7]),
-#   prev_hit_8 = sapply(prev_hit, function(x) x[8])
-# )
-# 
-# ##
-# table(MSC$condition,MSC$prev_condition)
-# 
-# 
-# prop.table(table(MSC$prev_hit_1))
-# prop.table(table(MSC$prev_hit_2))
-# prop.table(table(MSC$prev_hit_3))
-# prop.table(table(MSC$prev_hit_4))
-# prop.table(table(MSC$prev_hit_5))
-# prop.table(table(MSC$prev_hit_6))
-# prop.table(table(MSC$prev_hit_7))
-# prop.table(table(MSC$prev_hit_8))
-# 
-# ## Some indiciation of an effect
-# MSC%>%summarize(mean(p_prev_obj_hit, na.rm = TRUE))
-
-
-# OG Distance Analysis
-
-# MSC <- MSC%>%mutate(
-#   PREV_ORTHOGONAL_DISTANCE_1 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[1]),
-#   PREV_ORTHOGONAL_DISTANCE_2 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[2]),
-#   PREV_ORTHOGONAL_DISTANCE_3 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[3]),
-#   PREV_ORTHOGONAL_DISTANCE_4 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[4]),
-#   PREV_ORTHOGONAL_DISTANCE_5 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[5]),
-#   PREV_ORTHOGONAL_DISTANCE_6 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[6]),
-#   PREV_ORTHOGONAL_DISTANCE_7 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[7]),
-#   PREV_ORTHOGONAL_DISTANCE_8 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[8])
-# )
-# 
-# mean(MSC$PREV_ORTHOGONAL_DISTANCE_1, na.rm = TRUE)
-# mean(MSC$PREV_ORTHOGONAL_DISTANCE_2, na.rm = TRUE)
-# mean(MSC$PREV_ORTHOGONAL_DISTANCE_3, na.rm = TRUE)
-# mean(MSC$PREV_ORTHOGONAL_DISTANCE_4, na.rm = TRUE)
-# mean(MSC$PREV_ORTHOGONAL_DISTANCE_5, na.rm = TRUE)
-# mean(MSC$PREV_ORTHOGONAL_DISTANCE_6, na.rm = TRUE)
-# mean(MSC$PREV_ORTHOGONAL_DISTANCE_7, na.rm = TRUE)
-# mean(MSC$PREV_ORTHOGONAL_DISTANCE_8, na.rm = TRUE)
-# 
-# mean(MSC$MEAN_OG_DISTANCE, na.rm = TRUE)
-# mean(MSC$CENTER_OG_DISTANCE, na.rm = TRUE)
-# mean(MSC$AVG_FIX_1_PREV_OG_DISTANCE, na.rm = TRUE)
-# mean(MSC$AVG_FIX_2_PREV_OG_DISTANCE, na.rm = TRUE)
-# mean(MSC$AVG_FIX_3_PREV_OG_DISTANCE, na.rm = TRUE)
-# mean(MSC$AVG_FIX_4_PREV_OG_DISTANCE, na.rm = TRUE)
-
-
 # Vector Difference Analysis
 
 MSC <- MSC%>%mutate(
@@ -850,20 +790,6 @@ mean(MSC$PREV_ORTHOGONAL_DISTANCE_8, na.rm = TRUE)
 mean(MSC$AVG_DIST_FIX_8_PREV_OBJ_OG_DISTANCE, na.rm = TRUE)
 
 
-# 
-# mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_6, na.rm = TRUE)
-# 
-# mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_7, na.rm = TRUE)
-# 
-# mean(MSC$PREV_OBJ_FIX_DOT_PRODUCT_8, na.rm = TRUE)
-
-# mean(MSC$MEAN_OG_DISTANCE, na.rm = TRUE)
-# mean(MSC$CENTER_OG_DISTANCE, na.rm = TRUE)
-# mean(MSC$AVG_FIX_1_PREV_OG_DISTANCE, na.rm = TRUE)
-# mean(MSC$AVG_FIX_2_PREV_OG_DISTANCE, na.rm = TRUE)
-# mean(MSC$AVG_FIX_3_PREV_OG_DISTANCE, na.rm = TRUE)
-# mean(MSC$AVG_FIX_4_PREV_OG_DISTANCE, na.rm = TRUE)
-
 
 MSC_DOT_PRODUCTS <- MSC[, c("PREV_OBJ_FIX_DOT_PRODUCT_1", "AVG_DIST_FIX_1_PREV_OBJ_DOT_PRODUCT","PREV_OBJ_FIX_DOT_PRODUCT_2", "AVG_DIST_FIX_2_PREV_OBJ_DOT_PRODUCT", "PREV_OBJ_FIX_DOT_PRODUCT_3", "AVG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT")]
 
@@ -911,15 +837,7 @@ plot(
 )
 arrows(0, 0, coords[,1], coords[,2], length = 0.1, col = "red")
 # MSC$diff <- -MSC$PREV_ORTHOGONAL_DISTANCE_2 + MSC$MEAN_OG_DISTANCE  
-# MSC %>% ggplot() + geom_point(aes(x=CENTER_OG_DISTANCE, y=diff))
 
-write.csv(MSC[, c("AVG_CURR_IMG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT", "PREV_OBJ_FIX_DOT_PRODUCT_3", "AVG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT")], file = "dot_products.csv")
+#write.csv(MSC[, c("AVG_CURR_IMG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT", "PREV_OBJ_FIX_DOT_PRODUCT_3", "AVG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT")], file = "dot_products.csv")
 # write.csv(MSC[, c("PREV_ORTHOGONAL_DISTANCE_2", "CENTER_OG_DISTANCE", "MEAN_OG_DISTANCE", "AVG_FIX_OG_DISTANCE")], file = "MUTATED_MSC.csv")
 # write_json(MSC, "__data.json", pretty = TRUE)
-
-
-
-
-# Meeting 2.4.25
-#2 Taking image pairs XY, seeing across subjects where they tend to look?? 
-
