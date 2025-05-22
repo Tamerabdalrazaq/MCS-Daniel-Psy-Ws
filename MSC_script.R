@@ -10,7 +10,6 @@ rm(list = ls())
 DISPLAY_W <- 1280
 DISPLAY_H <- 800
 CENTER <- c(DISPLAY_W, DISPLAY_H)/2
-RANDOM_POINTS_COUNT <- 1000
 
 MSC_PATH = "C:/Users/averr/OneDrive/Desktop/TAU/Year 4/Semestar A/Psych Workshop/Scripts/1. Object Detection/MSC_DS_PROCESSED_DETECTINOS_25_12_2024.csv"
 MSC <- read_csv(MSC_PATH)
@@ -20,20 +19,21 @@ MSC_ORIGINAL <- MSC
 # Define script settings
 settings <- list(
   filter_bad_detections = TRUE,
-  prev_condition = "present",
-  curr_condition = "absent",
+  prev_condition = "present", 
+  curr_condition = "absent", # # TODO: Run when absent and present and both
   filter_inconsecutive_trial = TRUE,
   cluster_fixations = TRUE,
   features_to_remove = c("expected", "searcharray"),
   fliter_prev_absent = TRUE,
   test_subject = 1,
-  calc_mean_OG = FALSE
+  calc_mean_OG = FALSE,
+  N_BASELINE_FIXATIONS = 10 #relevant fixations for the baseline
 )
 
 # ================================Dataset Preprocessing================================
 
 # Conver N/A string to NA number for later type conversion
-MSC <<- mutate(MSC,
+MSC <- mutate(MSC,
                OBJECT_X1 = na_if(OBJECT_X1, "N\\A"),
                OBJECT_Y1 = na_if(OBJECT_Y1, "N\\A"),
                OBJECT_X2 = na_if(OBJECT_X2, "N\\A"),
@@ -41,7 +41,7 @@ MSC <<- mutate(MSC,
 
 # Convert featrues to be type int
 
-MSC <<- MSC %>%
+MSC <- MSC %>%
   mutate(
     across(c(
       OBJECT_X1, OBJECT_Y1, OBJECT_X2, OBJECT_Y2, 
@@ -51,24 +51,12 @@ MSC <<- MSC %>%
   )
 
 
-# Convert fixation coordinats from relative to absolute
-MSC <<- MSC %>% mutate(OBJECT_X1 = OBJECT_X1 + (DISPLAY_W - im_w)/2,
+# Convert fixation coordinates from relative to absolute
+MSC <- MSC %>% mutate(OBJECT_X1 = OBJECT_X1 + (DISPLAY_W - im_w)/2,
                        OBJECT_X2 = OBJECT_X2 + (DISPLAY_W - im_w)/2,
                        OBJECT_Y1 = OBJECT_Y1 + (DISPLAY_H - im_h)/2,
                        OBJECT_Y2 = OBJECT_Y2 + (DISPLAY_H - im_h)/2)
 
-# MSC <<- MSC %>% mutate(CURRENT_FIX_X = CURRENT_FIX_X - (DISPLAY_W - im_w)/2, 
-#                        CURRENT_FIX_Y = CURRENT_FIX_Y - (DISPLAY_H - im_h)/2)
-
-
-# merge  (im_h, im_w) -> img_res
-MSC <<- MSC %>%
-  mutate(
-    img_res = paste(im_w, im_h, sep = ",")
-  ) %>%
-  relocate(
-    img_res, .after = im_w
-  )
 
 
 # Remove unnecessary features
@@ -80,30 +68,15 @@ MSC <- MSC %>%
 MSC <- MSC %>%
   arrange(subjectnum, TRIAL_INDEX)
 
-
-# ===========================Adding New Features=====================================
-
-# Add hit - is fixation inside object
-MSC <<- mutate(MSC, hit = ifelse(OBJECT_X1 <= CURRENT_FIX_X &
-                                   OBJECT_Y1 <= CURRENT_FIX_Y &
-                                   OBJECT_X2 >= CURRENT_FIX_X &
-                                   OBJECT_Y2 >= CURRENT_FIX_Y
-                                 , 1, 0))
-
-# MSC <<- mutate(MSC, p_hit = ((OBJECT_X2-OBJECT_X1) * (OBJECT_Y2-OBJECT_Y1))/(im_w * im_h)
-# )
-
-# ============================Clustering==================================== 
+## ============================Data Grouping==================================== 
 
 
-# Cluster similar rows by subjectnum and trial_index. Merge unique data into a single array.
+# Group similar rows by subjectnum and trial_index. Merge unique data into a single array.
 if (settings$cluster_fixations){
-  MSC <<- MSC %>%
+  MSC <- MSC %>%
     group_by(subjectnum, TRIAL_INDEX) %>%
     summarize(
-      catcue = first(catcue),
       condition = first(condition),
-      img_res = first(img_res),
       im_w = first(im_w),
       im_h = first(im_h),
       img_name = first(img_name),
@@ -119,56 +92,41 @@ if (settings$cluster_fixations){
       OBJECT_X2 = first(OBJECT_X2),
       OBJECT_Y2 = first(OBJECT_Y2),
       confidence = first(confidence),
-      hit = list(hit),
-      # p_hit = first(p_hit),
-      # prev_hit = first(prev_hit),
-      LAST_BUTTON_PRESSED = first(LAST_BUTTON_PRESSED),
     )
 }
 
 
 
-# ============================More Features==================================== 
+## ============================Add New Features==================================== 
 
+# Relevant New Features
 MSC <- MSC %>%
   mutate(
-    PREV_OBJ_X1 = lag(OBJECT_X1, default = NA),
+    PREV_OBJ_X1 = lag(OBJECT_X1, default = NA), # Previous Object Coordinates
     PREV_OBJ_Y1 = lag(OBJECT_Y1, default = NA),
     PREV_OBJ_X2 = lag(OBJECT_X2, default = NA),
     PREV_OBJ_Y2 = lag(OBJECT_Y2, default = NA),
-  )
-MSC <- MSC %>%
-  mutate(
-    #p_prev_hit1 = lag(p_hit, default = NA),
-    # p_prev_obj_hit = ((PREV_OBJ_X2-PREV_OBJ_X1) * (PREV_OBJ_Y2-PREV_OBJ_Y1))/(im_w * im_h),
-    prev_condition = lag(condition, default = NA)
+    prev_condition = lag(condition, default = NA), # Previous Condition
+    lag_trial_index = lag(TRIAL_INDEX) # Previous Trial Index
   )
 
 
-# Fix 
-MSC <- MSC %>% mutate(
-lag_trial_index = lag(TRIAL_INDEX)
-)
 
-# Custom function
-calc_hit <- function(FIX_X, FIX_Y, PREV_X1, PREV_Y1, PREV_X2, PREV_Y2) {
-  return(ifelse(PREV_X1 <= FIX_X & PREV_Y1 <= FIX_Y & PREV_X2 >= FIX_X & PREV_Y2 >= FIX_Y, 1, 0))
-}
-
-# # prev_hit
-# MSC$prev_hit <- mapply(function(x1, x2, x3, x4, x5, x6) calc_hit(x1, x2, x3, x4, x5, x6),
-#                        MSC$CURRENT_FIX_X, MSC$CURRENT_FIX_Y, MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
-#                        MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2, SIMPLIFY = FALSE)
-
+# Images Baseline
+# Contains distributions of fixations accross subject for each image
+# Features: Fixations_X, Fixations_Y - Nxk matrix:
+#                      N number of subjects that saw the same image, k is the max number of fixations accross the N subjects)
+#           subjectnum: 
+#                      Nx1 vector containing the subject number of the relevant subjects
 IMAGES_DF <- MSC %>%
   group_by(img_name) %>%
   summarise(
     FIXATIONS_X = {
       # Get all vectors in current group
       vectors <- CURRENT_FIX_X
-      max_len <- max(lengths(vectors))
+      max_len <- max(lengths(vectors))  # k
       
-      # Create matrix with proper dimensions
+      # Create matrix Nxk with proper dimensions
       mat <- matrix(nrow = length(vectors), ncol = max_len)
       
       # Fill matrix row by row
@@ -201,17 +159,17 @@ IMAGES_DF <- MSC %>%
     .groups = "drop"
   )
 
-# =========================Filter Data=======================================
+## =========================Filter Data=======================================
 # Filter incorrect image detections
 if (settings$filter_bad_detections) {
-  MSC <<- MSC %>%
+  MSC <- MSC %>%
     filter(
       (condition == "present" & !is.na(OBJECT_X1)) |
         (condition == "absent" & is.na(OBJECT_X1))
     )
 }
 
-# Filter out inconsecutive trials
+# Filter out nonconsecutive trials
 if (settings$filter_inconsecutive_trial){
   MSC <- MSC %>%
     filter(
@@ -220,25 +178,31 @@ if (settings$filter_inconsecutive_trial){
 }
 
 
-### Prev absent DF for baseline
+### Dataframe for calculating subject fixations baseline 
 
-# MODIFIED!!!!!!!!!!!!!!!
+if (settings$fliter_prev_absent){
+  MSC <- MSC %>% filter(prev_condition == settings$prev_condition &
+                          condition == settings$curr_condition)
+}
 
-PREV_CURR_ABSENT_DF <- MSC %>%
-  filter(prev_condition == settings$prev_condition & 
-           condition == settings$curr_condition)
+FIXATIONS_BASELINE_DF <- MSC
 
-# MODIFIED!!!!!!!!!!!!!!!
-
-N <- 8
-
-# Extract fixation coordinates dynamically
-for (i in seq_len(N)) {
-  PREV_CURR_ABSENT_DF[[paste0("FIX_", i, "_X")]] <- sapply(PREV_CURR_ABSENT_DF$CURRENT_FIX_X, function(x) x[i])
-  PREV_CURR_ABSENT_DF[[paste0("FIX_", i, "_Y")]] <- sapply(PREV_CURR_ABSENT_DF$CURRENT_FIX_Y, function(x) x[i])
+if (settings$test_subject){
+  MSC <- MSC %>% filter(subjectnum == settings$test_subject)
 }
 
 
+
+## =========================Subject Fixations Vectors For Baselines=======================================
+
+# Extract fixation coordinates dynamically
+for (i in seq_len(settings$N_BASELINE_FIXATIONS)) {
+  FIXATIONS_BASELINE_DF[[paste0("FIX_", i, "_X")]] <- sapply(FIXATIONS_BASELINE_DF$CURRENT_FIX_X, function(x) x[i])
+  FIXATIONS_BASELINE_DF[[paste0("FIX_", i, "_Y")]] <- sapply(FIXATIONS_BASELINE_DF$CURRENT_FIX_Y, function(x) x[i])
+}
+
+
+# Transfoms the fixations from absolute to relative to an origin (CENTER)
 get_diff_vector <- function(coords, origin) {
   # coords: a vector of length 2, c(c1, c2)
   # origin: a vector of length 2, c(DISPLAY_W, DISPLAY_H)
@@ -252,29 +216,18 @@ get_diff_vector <- function(coords, origin) {
   return(coords - origin)
 }
 
-
-for (i in 1:N) {
+# Merges FIX_i_X and FIX_i_Y to FIX_i_VECTOR after applying the above transformation
+for (i in 1:settings$N_BASELINE_FIXATIONS) {
   x_col <- paste0("FIX_", i, "_X")
   y_col <- paste0("FIX_", i, "_Y")
   vec_col <- paste0("FIX_", i, "_VECTOR")
   
-  PREV_CURR_ABSENT_DF[[vec_col]] <- mapply(
-    function(c1, c2) get_diff_vector(c(c1, c2), c(DISPLAY_W, DISPLAY_H)/2),
-    PREV_CURR_ABSENT_DF[[x_col]], PREV_CURR_ABSENT_DF[[y_col]], SIMPLIFY = FALSE)
+  FIXATIONS_BASELINE_DF[[vec_col]] <- mapply(
+    function(c1, c2) get_diff_vector(c(c1, c2), CENTER),
+    FIXATIONS_BASELINE_DF[[x_col]], FIXATIONS_BASELINE_DF[[y_col]], SIMPLIFY = FALSE)
 }
 
-
-
-# Compute means dynamically (for OG dist)
-PREV_ABSENT_FIX_AVG <- PREV_CURR_ABSENT_DF %>%
-  group_by(subjectnum) %>%
-  summarise(
-    across(starts_with("FIX_"), mean, na.rm = TRUE)
-  ) %>%
-  ungroup()
-
-
-PREV_CURR_ABSENT_FIX_VECTORS <- PREV_CURR_ABSENT_DF %>%
+PREV_CURR_ABSENT_FIX_VECTORS <- FIXATIONS_BASELINE_DF %>%
   group_by(subjectnum) %>%
   summarize(
     FIX_1_VECTOR = list(FIX_1_VECTOR),
@@ -288,22 +241,10 @@ PREV_CURR_ABSENT_FIX_VECTORS <- PREV_CURR_ABSENT_DF %>%
   )
 
 
+# ============================Calculation of measures==================================== 
+## ============================Distance==================================== 
 
-# CONTINUE FILTER ###############
-
-if (settings$fliter_prev_absent){
-  MSC <- MSC %>% filter(prev_condition == settings$prev_condition &
-                          condition == settings$curr_condition)
-}
-
-if (settings$test_subject){
-  MSC <- MSC %>% filter(subjectnum == settings$test_subject)
-  # AVG_FIXATION_DF <- AVG_FIXATION_DF %>% filter(subjectnum == 1)
-}
-
-
-# ============================Orthogonal Projection==================================== 
-
+# Calculate the orgthogonal projection of (x,y) onto the rectangle (x1, y1, x2, y2)
 get_projection <- function(x, y, x1, y1, x2, y2) {
   if(is.na(x) | is.na(y) |is.na(x1) |is.na(y1) |is.na(x2) |is.na(y2)){
     return (NA)
@@ -383,7 +324,7 @@ MSC <- MSC %>%
   )
 
 
-# ============================Vector Difference Dot Product==================================== 
+## ============================Angles==================================== 
 
 calc_norm <- function(v) {
   dist <- euc_l2(v[1], v[2], 0, 0)
@@ -458,28 +399,6 @@ MSC <- MSC %>%
 
 # Calculate the average OG distance of a random point
 # from the * previous * detection
-
-# The point is inside the image 
-calculate_single_mean_distance  <- function(im_w, im_h, obj_x1, obj_y1, obj_x2, obj_y2) {
-  # Calculate the Euclidean distance
-  x_vector <- runif(RANDOM_POINTS_COUNT, min = (DISPLAY_W - im_w)/2, (DISPLAY_W - im_w)/2 + im_w)
-  y_vector <- runif(RANDOM_POINTS_COUNT, min = (DISPLAY_H - im_h)/2, (DISPLAY_H - im_h)/2 + im_h)
-  distances <- mapply(calc_orthogonal_distance,
-                     x_vector, y_vector,
-                     MoreArgs = list(obj_x1 = obj_x1, obj_y1 = obj_y1,
-                                     obj_x2 = obj_x2, obj_y2 = obj_y2))
-  
-  return(mean(distances))
-}
-
-
-if (settings$calc_mean_OG) {
-  MSC$MEAN_OG_DISTANCE <- mapply(calculate_single_mean_distance,
-                               MSC$im_w, MSC$im_h,
-                               MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
-                               MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2)
-}
-
 
 
 
@@ -841,3 +760,13 @@ arrows(0, 0, coords[,1], coords[,2], length = 0.1, col = "red")
 #write.csv(MSC[, c("AVG_CURR_IMG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT", "PREV_OBJ_FIX_DOT_PRODUCT_3", "AVG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT")], file = "dot_products.csv")
 # write.csv(MSC[, c("PREV_ORTHOGONAL_DISTANCE_2", "CENTER_OG_DISTANCE", "MEAN_OG_DISTANCE", "AVG_FIX_OG_DISTANCE")], file = "MUTATED_MSC.csv")
 # write_json(MSC, "__data.json", pretty = TRUE)
+
+
+
+# TODO
+# (N-2) effect
+# Image-based baseline for distance
+# Remove > 25% microwaves trials
+# Manipulate filtration with possible combinations of present, absent
+# Code Review
+# Run all above on clocks
