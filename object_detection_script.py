@@ -3,14 +3,21 @@ import cv2
 import pandas as pd
 import math
 
-DB_NAME = "microwave_fixations.csv"
-MCS_FOLDER_BATH = r"C:\Users\averr\OneDrive\Desktop\TAU\Year 4\Psych Workshop\MCS_dataset"
-IMAGE_GROUP = "train"
+# python3 detection_script.py
+# Configure these parameters before running the script
 
+
+DB_NAME = "clock_fixations.csv" # Name of the CSV file containing the dataset
+MCS_FOLDER_BATH = r"C:\Users\averr\OneDrive\Desktop\TAU\Year 4\Semestar A\Psych Workshop\MCS_dataset" # Absolute path for the folder containing the dataset
+IMAGE_GROUP = "train" # Group in ["train", "test"]
+OBJECT = "clock" # OBJECT \in {"clock", "microwave"}
+
+# In case you need to run the script on a part of the dataset define the corresponding rows by START_LIMIT and END_LIMIT 
 START_LIMIT = 0
-END_LIMIT = 2000
-DETECTION_SAVE_PATH = ".\detections"
-SAVED_CSV_FILE_NAME = "filtered_data_YOLOV11_1_2000"
+END_LIMIT = None # All dataset
+DETECTION_SAVE_PATH = f".\detections_{OBJECT}" # Save the detected images in MCS_FOLDER_BATH\DETECTION_SAVE_PATH
+SAVED_CSV_FILE_NAME = "MSC_PROCESSED_DETECTIONS_CLOCKS"  # Name of the dataset after processing
+
 
 def get_img_name_from_path(path):
     return path.split("\\")[-1]
@@ -21,7 +28,7 @@ def detect_microwave(image_path):
     # Get class names from the model
     class_names = model.names
     # Find the index of "microwave" in the class names dictionary
-    microwave_index = [key for key, value in class_names.items() if value == "microwave"][0]
+    microwave_index = [key for key, value in class_names.items() if value == OBJECT][0]
 
     # Run detection with filtering to only detect microwaves
     results = model([image_path], classes=[microwave_index])  # Use 'classes' to limit detection to microwaves only
@@ -48,17 +55,17 @@ def get_image_full_path(img_name, object, condition):
 
 def find_microwaves():
     df = pd.read_csv(DB_NAME)[START_LIMIT:END_LIMIT]
-    total_rows = END_LIMIT - START_LIMIT
-    img_n_a = ("N\A", "N\A","N\A","N\A","N\A")
+    end_limit = END_LIMIT if END_LIMIT else len(df)
+    total_rows = end_limit - START_LIMIT
+    img_n_a = ("N\\A", "N\\A","N\\A","N\\A","N\\A")
     processed_images = dict()
     current_percentage = 0
+    print( f"***********************") 
     def process_image(img_name, condition, object, index):
         nonlocal current_percentage
         if math.floor((index/total_rows)*100) >= current_percentage + 1:
             current_percentage = current_percentage + 1
-            print( f"***********************") 
             print( f"{current_percentage}%") 
-            print( f"***********************") 
         if condition == "absent":
             return img_n_a
         if img_name in processed_images:
@@ -70,6 +77,7 @@ def find_microwaves():
             return img_n_a
         processed_images[img_name] = detection_res
         return detection_res
+    print( f"***********************") 
     df['img_name'] = df.apply(lambda row: get_pure_img_name(row['searcharray']), axis=1, result_type='expand')
     df[['OBJECT_X1', 'OBJECT_Y1', 'OBJECT_X2', 'OBJECT_Y2', "confidence"]] = df.apply(lambda row: process_image(row['img_name'], row['condition'], row['catcue'], row.name), axis=1, result_type='expand')
     df.to_csv(f'{SAVED_CSV_FILE_NAME}.csv', index=False)
@@ -77,7 +85,7 @@ def find_microwaves():
     print(df)
 
 
-
+# In case you run the script on two subsets that need merging
 def merge_chuncks():
     # Paths to the two CSV files
     file1 = "filtered_data_YOLOV11_1_2000_25_12_24.csv"  # Contains rows 1-2000
@@ -96,7 +104,11 @@ def merge_chuncks():
     print("Merged dataset saved as 'merged_dataset.csv'")
 
 
+
+
+
 def main():
-    merge_chuncks()
+    find_microwaves()
+    #merge_chuncks()
 
 main()
