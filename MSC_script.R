@@ -4,6 +4,8 @@ library(readr)
 library(tidyr)
 library(tidyverse)
 library(purrr)
+library(crayon)
+
 
 rm(list = ls())
 
@@ -31,7 +33,7 @@ settings <- list(
   test_subject = 1,
   calc_mean_OG = FALSE,
   N_BASELINE_FIXATIONS = 10, #relevant fixations for the baseline,
-  POL_EFFECT_ORDER = 4 #
+  POL_EFFECT_ORDER = 1 #
 )
 
 # run_script <- function() {
@@ -676,7 +678,42 @@ settings <- list(
     
     # ============================Analysis==================================== 
     cat("\n ================ Current Settings: ", settings$prev_condition, " ", settings$curr_condition , "===============\n\n")
-    # Vector Difference Analysis
+    # # Vector Difference Analysis
+    # get_color <- function(base, score, dir){
+    #   print(base)
+    #   print(score)
+    #   if(dir*base > dir*score){
+    #     return(red)
+    #   } else{
+    #     return(green)
+    #   }
+    # }
+    # 
+    # print_colored_table <- function(df, dir){
+    #   for (i in 1:nrow(df)) {
+    #     base <- df[i, "Measure"]
+    #     row_text <- ""
+    #     if(is.na(base)){
+    #       continue
+    #     }
+    #     
+    #     for (j in 1:ncol(df)) {
+    #       value <- df[i, j]
+    #       if (names(df)[j] == "Measure") {
+    #         # Print Measure column without coloring
+    #         cell <- invisible(sprintf("%4s", value))
+    #       } else {
+    #         color_fun <- get_color(base, value, dir)
+    #         cell <- color_fun(sprintf("%4s", value))
+    #       }
+    #       
+    #       row_text <- paste0(row_text, " ", cell)
+    #     }
+    #     
+    #     cat(row_text, "\n")
+    #   }
+    # }
+    
     
     MSC <- MSC%>%mutate(
       PREV_OBJ_FIX_DOT_PRODUCT_1 = sapply(PREV_OBJ_FIX_DOT_PRODUCT, function(x) x[1]),
@@ -704,7 +741,11 @@ settings <- list(
       row = c(mean_1, mean_2, mean_3)
       df <- rbind(df, data.frame(Measure = row[1], Subject_BL = row[2], Image_BL = row[3], stringsAsFactors = FALSE))
     }
-    print(format(df, digits = 2, nsmall = 2))
+    df <- format(df, digits = 2, nsmall = 2)
+    df[] <- lapply(df, as.numeric)
+    df$Subject_BL <- df$Measure - df$Subject_BL 
+    df$Image_BL <- df$Measure - df$Image_BL
+    print(df)
     
     # OG Distance Comparison
     MSC <- MSC%>%mutate(
@@ -733,8 +774,11 @@ settings <- list(
       row = c(mean_1, mean_2, mean_3)
       df <- rbind(df, data.frame(Measure = row[1], Subject_BL = row[2], Image_BL = row[3], stringsAsFactors = FALSE))
     }
-    print(format(df, digits = 2, nsmall = 2))
-    
+    df <- format(df, digits = 2, nsmall = 2)
+    df[] <- lapply(df, as.numeric)
+    df$Subject_BL <-df$Subject_BL - df$Measure
+    df$Image_BL <-df$Image_BL - df$Measure
+    print(df)    
     
     # MSC_DOT_PRODUCTS <- MSC[, c("PREV_OBJ_FIX_DOT_PRODUCT_1", "AVG_DIST_FIX_1_PREV_OBJ_DOT_PRODUCT","PREV_OBJ_FIX_DOT_PRODUCT_2", "AVG_DIST_FIX_2_PREV_OBJ_DOT_PRODUCT", "PREV_OBJ_FIX_DOT_PRODUCT_3", "AVG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT")]
     # 
