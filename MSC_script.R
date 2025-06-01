@@ -14,6 +14,7 @@ CENTER <- c(DISPLAY_W, DISPLAY_H)/2
 MSC_PATH = "C:/Users/averr/OneDrive/Desktop/TAU/Year 4/Semestar A/Psych Workshop/Scripts/1. Object Detection/MSC_DS_PROCESSED_DETECTINOS_25_12_2024.csv"
 MSC <- read_csv(MSC_PATH)
 MSC_ORIGINAL <- MSC
+GROUPED_MSC <- MSC
 
 
 # Define script settings
@@ -29,17 +30,18 @@ settings <- list(
   fliter_prev_absent = TRUE,
   test_subject = 1,
   calc_mean_OG = FALSE,
-  N_BASELINE_FIXATIONS = 10 #relevant fixations for the baseline
+  N_BASELINE_FIXATIONS = 10, #relevant fixations for the baseline,
+  POL_EFFECT_ORDER = 4 #
 )
 
-run_script <- function() {
+# run_script <- function() {
       
     
     
     # ================================Dataset Preprocessing================================
     
     # Conver N/A string to NA number for later type conversion
-    MSC <<- mutate(MSC,
+    MSC <- mutate(MSC,
                    OBJECT_X1 = na_if(OBJECT_X1, "N\\A"),
                    OBJECT_Y1 = na_if(OBJECT_Y1, "N\\A"),
                    OBJECT_X2 = na_if(OBJECT_X2, "N\\A"),
@@ -47,7 +49,7 @@ run_script <- function() {
     
     # Convert featrues to be type int
     
-    MSC <<- MSC %>%
+    MSC <- MSC %>%
       mutate(
         across(c(
           OBJECT_X1, OBJECT_Y1, OBJECT_X2, OBJECT_Y2, 
@@ -58,7 +60,7 @@ run_script <- function() {
     
     
     # Convert fixation coordinates from relative to absolute
-    MSC <<- MSC %>% mutate(OBJECT_X1 = OBJECT_X1 + (DISPLAY_W - im_w)/2,
+    MSC <- MSC %>% mutate(OBJECT_X1 = OBJECT_X1 + (DISPLAY_W - im_w)/2,
                            OBJECT_X2 = OBJECT_X2 + (DISPLAY_W - im_w)/2,
                            OBJECT_Y1 = OBJECT_Y1 + (DISPLAY_H - im_h)/2,
                            OBJECT_Y2 = OBJECT_Y2 + (DISPLAY_H - im_h)/2)
@@ -66,12 +68,12 @@ run_script <- function() {
     
     
     # Remove unnecessary features
-    MSC <<- MSC %>%
+    MSC <- MSC %>%
       select(-all_of(settings$features_to_remove))
     
     
     # Sort by subjectnum, TRIAL_INDEX
-    MSC <<- MSC %>%
+    MSC <- MSC %>%
       arrange(subjectnum, TRIAL_INDEX)
     
     ## ============================Data Grouping==================================== 
@@ -79,7 +81,7 @@ run_script <- function() {
     
     # Group similar rows by subjectnum and trial_index. Merge unique data into a single array.
     if (settings$cluster_fixations){
-      MSC <<- MSC %>%
+      MSC <- MSC %>%
         group_by(subjectnum, TRIAL_INDEX) %>%
         summarize(
           condition = first(condition),
@@ -101,20 +103,39 @@ run_script <- function() {
         )
     }
     
-    
+    GROUPED_MSC <- MSC
     
     ## ============================Add New Features==================================== 
+    prev_features <- c("OBJECT_X1", "OBJECT_X2", "OBJECT_Y1", "OBJECT_Y2", "condition", "TRIAL_INDEX")
+    get_prev_feature <- function (subjectnum, trial_index){
+      idx <- which(MSC$subjectnum == subjectnum & MSC$TRIAL_INDEX == trial_index - settings$POL_EFFECT_ORDER)
+      if (length(idx) == 0) {
+        return(NA)
+      }
+      if (length(idx) > 1) {
+        stop("2 matching trials @ get_prev_feature")
+      }
+      prev_trial = MSC[idx, ]
+      prev_features_list = lapply(prev_features, function(feature) prev_trial[[feature]])
+      return((prev_features_list))
+    }
+    MSC$PREV_FEATURES <- Map(get_prev_feature, MSC$subjectnum, MSC$TRIAL_INDEX)
     
-    # Relevant New Features
-    MSC <<- MSC %>%
-      mutate(
-        PREV_OBJ_X1 = lag(OBJECT_X1, default = NA), # Previous Object Coordinates
-        PREV_OBJ_Y1 = lag(OBJECT_Y1, default = NA),
-        PREV_OBJ_X2 = lag(OBJECT_X2, default = NA),
-        PREV_OBJ_Y2 = lag(OBJECT_Y2, default = NA),
-        prev_condition = lag(condition, default = NA), # Previous Condition
-        lag_trial_index = lag(TRIAL_INDEX) # Previous Trial Index
-      )
+    for (i in seq_along(prev_features)) {
+      feature <- prev_features[[i]]  # get actual string
+      prev_feature <- paste0("PREV_", feature)
+      
+      MSC[[prev_feature]] <- sapply(MSC$PREV_FEATURES, function(x) {
+        if (is.list(x)) x[i] else NA
+      })
+    }
+
+    
+    MSC$PREV_OBJECT_X1 <- as.numeric(MSC$PREV_OBJECT_X1)
+    MSC$PREV_OBJECT_Y1 <- as.numeric(MSC$PREV_OBJECT_Y1)
+    MSC$PREV_OBJECT_X2 <- as.numeric(MSC$PREV_OBJECT_X2)
+    MSC$PREV_OBJECT_Y2 <- as.numeric(MSC$PREV_OBJECT_Y2)
+    MSC$PREV_FEATURES <- NULL
     
     
     
@@ -168,10 +189,14 @@ run_script <- function() {
     ## =========================Filter Data=======================================
     # Filter incorrect image detections
     if (settings$filter_bad_detections) {
-      MSC <<- MSC %>%
+      MSC <- MSC %>%
         filter(
           (condition == "present" & !is.na(OBJECT_X1)) |
             (condition == "absent" & is.na(OBJECT_X1))
+        ) %>% 
+        filter(
+          (PREV_condition == "present" & !is.na(PREV_OBJECT_X1)) |
+            (PREV_condition == "absent" & is.na(PREV_OBJECT_X1))
         )
     }
     
@@ -190,9 +215,9 @@ run_script <- function() {
     
     # Filter out nonconsecutive trials
     if (settings$filter_inconsecutive_trial){
-      MSC <<- MSC %>%
+      MSC <- MSC %>%
         filter(
-          TRIAL_INDEX == lag_trial_index + 1
+          !is.na(PREV_TRIAL_INDEX)
         )
     }
     
@@ -200,16 +225,16 @@ run_script <- function() {
     ### Dataframe for calculating subject fixations baseline 
     
     if (settings$fliter_prev_absent){
-      MSC <<- MSC %>% filter(prev_condition == settings$prev_condition)
+      MSC <- MSC %>% filter(PREV_condition == settings$prev_condition)
       if(settings$curr_condition != FALSE){
-        MSC <<- MSC %>% filter(condition == settings$curr_condition)
+        MSC <- MSC %>% filter(condition == settings$curr_condition)
       }
     }
     
     
     if (settings$filter_prev_big_objects) {
-      MSC <<- MSC %>% filter(get_obj_ratio(PREV_OBJ_X1, PREV_OBJ_Y1,
-                                          PREV_OBJ_X2, PREV_OBJ_Y2,
+      MSC <- MSC %>% filter(get_obj_ratio(PREV_OBJECT_X1, PREV_OBJECT_Y1,
+                                          PREV_OBJECT_X2, PREV_OBJECT_Y2,
                                           im_w, im_h) < settings$filter_prev_big_objects)
     }
     
@@ -218,10 +243,11 @@ run_script <- function() {
     # FIXATIONS_BASELINE_DF <- FIXATIONS_BASELINE_DF %>% filter(prev_condition == "absent")
     # 
     if (settings$test_subject){
-      MSC <<- MSC %>% filter(subjectnum == settings$test_subject)
+      MSC <- MSC %>% filter(subjectnum == settings$test_subject)
     }
     
     
+    print("Done Filtering")
     
     ## =========================Subject Fixations Vectors For Baselines=======================================
     
@@ -268,6 +294,8 @@ run_script <- function() {
         FIX_6_VECTOR = list(FIX_6_VECTOR),
         FIX_7_VECTOR = list(FIX_7_VECTOR),
         FIX_8_VECTOR = list(FIX_8_VECTOR),
+        FIX_9_VECTOR = list(FIX_9_VECTOR),
+        FIX_10_VECTOR = list(FIX_10_VECTOR),
       )
     
     
@@ -335,18 +363,18 @@ run_script <- function() {
       }
       
       # Return the list of distances
-      return(distances)
+      return(list(distances))
     }
     
     # Apply the function to the MSC dataset
-    MSC <<- MSC %>%
+    MSC <- MSC %>%
       mutate(
         PREV_ORTHOGONAL_DISTANCE = ifelse(
-          !is.na(PREV_OBJ_X1) & !is.na(PREV_OBJ_Y1) & !is.na(PREV_OBJ_X2) & !is.na(PREV_OBJ_Y2),
+          !is.na(PREV_OBJECT_X1) & !is.na(PREV_OBJECT_Y1) & !is.na(PREV_OBJECT_X2) & !is.na(PREV_OBJECT_Y2),
           mapply(
             calc_orthogonal_distances,
             CURRENT_FIX_X, CURRENT_FIX_Y,
-            PREV_OBJ_X1, PREV_OBJ_Y1, PREV_OBJ_X2, PREV_OBJ_Y2
+            PREV_OBJECT_X1, PREV_OBJECT_Y1, PREV_OBJECT_X2, PREV_OBJECT_Y2
           ),
           NA  # Assign NA if any required column has NA
         )
@@ -406,17 +434,17 @@ run_script <- function() {
       }
       
       # Return the list of distances
-      return(products)
+      return(list(products))
     }
     
-    MSC <<- MSC %>%
+    MSC <- MSC %>%
       mutate(
         PREV_OBJ_FIX_DOT_PRODUCT = ifelse(
-          !is.na(PREV_OBJ_X1) & !is.na(PREV_OBJ_Y1) & !is.na(PREV_OBJ_X2) & !is.na(PREV_OBJ_Y2),
+          !is.na(PREV_OBJECT_X1) & !is.na(PREV_OBJECT_Y1) & !is.na(PREV_OBJECT_X2) & !is.na(PREV_OBJECT_Y2),
           mapply(
             get_curr_fix_prev_obj_dot_product,
             CURRENT_FIX_X, CURRENT_FIX_Y,
-            PREV_OBJ_X1, PREV_OBJ_Y1, PREV_OBJ_X2, PREV_OBJ_Y2
+            PREV_OBJECT_X1, PREV_OBJECT_Y1, PREV_OBJECT_X2, PREV_OBJECT_Y2
           ),
           NA  # Assign NA if any required column has NA
         )
@@ -430,8 +458,8 @@ run_script <- function() {
     # Calculate the OG distance between center and  the * previous * detection
     MSC$CENTER_OG_DISTANCE <- mapply(calc_orthogonal_distance,
                                    DISPLAY_W/2, DISPLAY_H/2,
-                                   MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
-                                   MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2)
+                                   MSC$PREV_OBJECT_X1, MSC$PREV_OBJECT_Y1,
+                                   MSC$PREV_OBJECT_X2, MSC$PREV_OBJECT_Y2)
       
       
     calc_dist_i_og_distance <- function(fix_num){
@@ -460,8 +488,8 @@ run_script <- function() {
             return(distances)
           },
           MSC$subjectnum,
-          MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
-          MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
+          MSC$PREV_OBJECT_X1, MSC$PREV_OBJECT_Y1,
+          MSC$PREV_OBJECT_X2, MSC$PREV_OBJECT_Y2
         )
     }
       
@@ -525,8 +553,8 @@ run_script <- function() {
         },
         MSC$subjectnum,
         MSC$img_name,
-        MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
-        MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
+        MSC$PREV_OBJECT_X1, MSC$PREV_OBJECT_Y1,
+        MSC$PREV_OBJECT_X2, MSC$PREV_OBJECT_Y2
       )
     }
     
@@ -565,8 +593,8 @@ run_script <- function() {
           return(products)
         },
         MSC$subjectnum,
-        MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
-        MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
+        MSC$PREV_OBJECT_X1, MSC$PREV_OBJECT_Y1,
+        MSC$PREV_OBJECT_X2, MSC$PREV_OBJECT_Y2
       )
     }
     
@@ -629,8 +657,8 @@ run_script <- function() {
         },
         MSC$subjectnum,
         MSC$img_name,
-        MSC$PREV_OBJ_X1, MSC$PREV_OBJ_Y1,
-        MSC$PREV_OBJ_X2, MSC$PREV_OBJ_Y2
+        MSC$PREV_OBJECT_X1, MSC$PREV_OBJECT_Y1,
+        MSC$PREV_OBJECT_X2, MSC$PREV_OBJECT_Y2
       )
     }
     
@@ -708,7 +736,7 @@ run_script <- function() {
     print(format(df, digits = 2, nsmall = 2))
     
     
-    # MSC_DOT_PRODUCTS <<- MSC[, c("PREV_OBJ_FIX_DOT_PRODUCT_1", "AVG_DIST_FIX_1_PREV_OBJ_DOT_PRODUCT","PREV_OBJ_FIX_DOT_PRODUCT_2", "AVG_DIST_FIX_2_PREV_OBJ_DOT_PRODUCT", "PREV_OBJ_FIX_DOT_PRODUCT_3", "AVG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT")]
+    # MSC_DOT_PRODUCTS <- MSC[, c("PREV_OBJ_FIX_DOT_PRODUCT_1", "AVG_DIST_FIX_1_PREV_OBJ_DOT_PRODUCT","PREV_OBJ_FIX_DOT_PRODUCT_2", "AVG_DIST_FIX_2_PREV_OBJ_DOT_PRODUCT", "PREV_OBJ_FIX_DOT_PRODUCT_3", "AVG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT")]
     # 
     # 
     # # Draw subject fixation i distribution
@@ -729,7 +757,7 @@ run_script <- function() {
     # 
     # MSC <- MSC %>%
     #   mutate(PO_COORDS = pmap(
-    #     list(PREV_OBJ_X1, PREV_OBJ_X2, PREV_OBJ_Y1, PREV_OBJ_Y2),
+    #     list(PREV_OBJECT_X1, PREV_OBJECT_X2, PREV_OBJECT_Y1, PREV_OBJECT_Y2),
     #     ~ c((..1 + ..2)/2, (..3 + ..4)/2)
     #   ))
     # 
@@ -754,16 +782,16 @@ run_script <- function() {
     # )
     # arrows(0, 0, coords[,1], coords[,2], length = 0.1, col = "red")
 
-}
+# }
 
 
-curr_conditions = list("present", "absent", FALSE)
-for(cond in curr_conditions){
-  settings$curr_condition = cond
-  MSC <<- MSC_ORIGINAL
-  run_script()
-}
-
+# curr_conditions = list(FALSE)
+# for(cond in curr_conditions){
+#   settings$curr_condition = cond
+#   MSC <- MSC_ORIGINAL
+#   run_script()
+# }
+# 
 
 # MSC$diff <- -MSC$PREV_ORTHOGONAL_DISTANCE_2 + MSC$MEAN_OG_DISTANCE  
 
