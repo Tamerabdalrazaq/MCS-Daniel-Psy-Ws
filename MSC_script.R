@@ -26,7 +26,7 @@ settings <- list(
   filter_curr_big_objects = 0.25,
   filter_prev_big_objects = 0.25,
   prev_condition = "present", 
-  curr_condition = "absent",
+  curr_condition = FALSE,
   cluster_fixations = TRUE,
   features_to_remove = c("expected", "searcharray"),
   fliter_prev_absent = TRUE,
@@ -61,7 +61,7 @@ settings <- list(
       )
     
     
-    # Convert fixation coordinates from relative to absolute
+    # Convert detection coordinates from relative to absolute
     MSC <- MSC %>% mutate(OBJECT_X1 = OBJECT_X1 + (DISPLAY_W - im_w)/2,
                            OBJECT_X2 = OBJECT_X2 + (DISPLAY_W - im_w)/2,
                            OBJECT_Y1 = OBJECT_Y1 + (DISPLAY_H - im_h)/2,
@@ -155,7 +155,7 @@ settings <- list(
           vectors <- CURRENT_FIX_X
           max_len <- max(lengths(vectors))  # k
           
-          # Create matrix Nxk with proper dimensions
+          # Create matrix Nxk with proper dimensions  
           mat <- matrix(nrow = length(vectors), ncol = max_len)
           
           # Fill matrix row by row
@@ -224,8 +224,6 @@ settings <- list(
     }
     
     
-    ### Dataframe for calculating subject fixations baseline 
-    
     if (settings$fliter_prev_absent){
       MSC <- MSC %>% filter(PREV_condition == settings$prev_condition)
       if(settings$curr_condition != FALSE){
@@ -238,6 +236,12 @@ settings <- list(
       MSC <- MSC %>% filter(get_obj_ratio(PREV_OBJECT_X1, PREV_OBJECT_Y1,
                                           PREV_OBJECT_X2, PREV_OBJECT_Y2,
                                           im_w, im_h) < settings$filter_prev_big_objects)
+    }
+    
+    if (settings$filter_curr_big_objects) {
+      MSC <- MSC %>% filter(get_obj_ratio(OBJECT_X1, OBJECT_Y1,
+                                          OBJECT_X2, OBJECT_Y2,
+                                          im_w, im_h) < settings$filter_curr_big_objects)
     }
     
     
@@ -741,10 +745,10 @@ settings <- list(
       row = c(mean_1, mean_2, mean_3)
       df <- rbind(df, data.frame(Measure = row[1], Subject_BL = row[2], Image_BL = row[3], stringsAsFactors = FALSE))
     }
-    df <- format(df, digits = 2, nsmall = 2)
+    df <- format(df, digits = 2, nsmall = gg2)
     df[] <- lapply(df, as.numeric)
-    df$Subject_BL <- df$Measure - df$Subject_BL 
-    df$Image_BL <- df$Measure - df$Image_BL
+    # df$Subject_BL <- df$Measure - df$Subject_BL 
+    # df$Image_BL <- df$Measure - df$Image_BL
     print(df)
     
     # OG Distance Comparison
@@ -776,8 +780,8 @@ settings <- list(
     }
     df <- format(df, digits = 2, nsmall = 2)
     df[] <- lapply(df, as.numeric)
-    df$Subject_BL <-df$Subject_BL - df$Measure
-    df$Image_BL <-df$Image_BL - df$Measure
+    # df$Subject_BL <-df$Subject_BL - df$Measure
+    # df$Image_BL <-df$Image_BL - df$Measure
     print(df)    
     
     # MSC_DOT_PRODUCTS <- MSC[, c("PREV_OBJ_FIX_DOT_PRODUCT_1", "AVG_DIST_FIX_1_PREV_OBJ_DOT_PRODUCT","PREV_OBJ_FIX_DOT_PRODUCT_2", "AVG_DIST_FIX_2_PREV_OBJ_DOT_PRODUCT", "PREV_OBJ_FIX_DOT_PRODUCT_3", "AVG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT")]
@@ -846,9 +850,16 @@ settings <- list(
 
 
 # TODO
-# (N-2) effect
+# (N-2) effect ✅ 
 # Image-based baseline for distance ✅ 
 # Remove > 25% microwaves trials ✅ 
 # Manipulate filtration with possible combinations of present, absent ✅ 
 # Code Review
 # Run all above on clocks
+
+    
+# Graph with raw data
+df <- df%>% pivot_longer(Measure: Image_BL, names_to = "measure_type", values_to = "Distance")
+df%>%ggplot() + geom_path(aes(x = as.numeric(fixation), y = Distance, color=measure_type))
+
+# Complete the graphing for all variation of (micro, clock) x (curr_cond: present, absent, any)
