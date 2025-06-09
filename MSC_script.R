@@ -7,20 +7,9 @@ library(purrr)
 library(crayon)
 
 
-rm(list = ls())
-
-DISPLAY_W <- 1280
-DISPLAY_H <- 800
-CENTER <- c(DISPLAY_W, DISPLAY_H)/2
-
-MSC_PATH = "C:/Users/averr/OneDrive/Desktop/TAU/Year 4/Semestar A/Psych Workshop/Scripts/1. Object Detection/MSC_DS_PROCESSED_DETECTINOS_25_12_2024.csv"
-MSC <- read_csv(MSC_PATH)
-MSC_ORIGINAL <- MSC
-GROUPED_MSC <- MSC
-
-
 # Define script settings
-settings <- list(
+settings <<- list(
+  object = 'm',
   filter_bad_detections = TRUE,
   filter_inconsecutive_trial = TRUE,
   filter_curr_big_objects = 0.25,
@@ -32,11 +21,25 @@ settings <- list(
   fliter_prev_absent = TRUE,
   test_subject = 1,
   calc_mean_OG = FALSE,
-  N_BASELINE_FIXATIONS = 10, #relevant fixations for the baseline,
-  POL_EFFECT_ORDER = 1 #
+  N_BASELINE_FIXATIONS = 5, #relevant fixations for the baseline,
+  POL_EFFECT_ORDER = 10 #
 )
 
-# run_script <- function() {
+DISPLAY_W <<- 1280
+DISPLAY_H <<- 800
+CENTER <<- c(DISPLAY_W, DISPLAY_H)/2
+
+if(settings$object == 'm'){
+  MSC_PATH <<- "C:/Users/averr/OneDrive/Desktop/TAU/Year 4/Semestar A/Psych Workshop/Scripts/1. Object Detection/MSC_DS_PROCESSED_DETECTINOS_25_12_2024.csv"
+} else {
+  MSC_PATH <<- "C:/Users/averr/OneDrive/Desktop/TAU/Year 4/Semestar A/Psych Workshop/Scripts/1. Object Detection/MSC_PROCESSED_DETECTIONS_CLOCKS.csv"
+}
+
+
+run_script <- function() {
+    MSC <- read_csv(MSC_PATH)
+    MSC_ORIGINAL <- MSC
+    GROUPED_MSC <- MSC
       
     
     
@@ -79,6 +82,9 @@ settings <- list(
       arrange(subjectnum, TRIAL_INDEX)
     
     ## ============================Data Grouping==================================== 
+    if (settings$test_subject){
+      MSC <- MSC %>% filter(subjectnum == settings$test_subject)
+    }
     
     
     # Group similar rows by subjectnum and trial_index. Merge unique data into a single array.
@@ -233,13 +239,13 @@ settings <- list(
     
     
     if (settings$filter_prev_big_objects) {
-      MSC <- MSC %>% filter(get_obj_ratio(PREV_OBJECT_X1, PREV_OBJECT_Y1,
+      MSC <- MSC %>% filter(  get_obj_ratio(PREV_OBJECT_X1, PREV_OBJECT_Y1,
                                           PREV_OBJECT_X2, PREV_OBJECT_Y2,
                                           im_w, im_h) < settings$filter_prev_big_objects)
     }
     
     if (settings$filter_curr_big_objects) {
-      MSC <- MSC %>% filter(get_obj_ratio(OBJECT_X1, OBJECT_Y1,
+      MSC <- MSC %>% filter(condition == 'absent' | get_obj_ratio(OBJECT_X1, OBJECT_Y1,
                                           OBJECT_X2, OBJECT_Y2,
                                           im_w, im_h) < settings$filter_curr_big_objects)
     }
@@ -247,11 +253,6 @@ settings <- list(
     
     FIXATIONS_BASELINE_DF <- MSC
     # FIXATIONS_BASELINE_DF <- FIXATIONS_BASELINE_DF %>% filter(prev_condition == "absent")
-    # 
-    if (settings$test_subject){
-      MSC <- MSC %>% filter(subjectnum == settings$test_subject)
-    }
-    
     
     print("Done Filtering")
     
@@ -289,20 +290,11 @@ settings <- list(
         FIXATIONS_BASELINE_DF[[x_col]], FIXATIONS_BASELINE_DF[[y_col]], SIMPLIFY = FALSE)
     }
     
+    vector_cols <- paste0("FIX_", 1:settings$N_BASELINE_FIXATIONS, "_VECTOR")
     PREV_CURR_ABSENT_FIX_VECTORS <- FIXATIONS_BASELINE_DF %>%
       group_by(subjectnum) %>%
-      summarize(
-        FIX_1_VECTOR = list(FIX_1_VECTOR),
-        FIX_2_VECTOR = list(FIX_2_VECTOR),
-        FIX_3_VECTOR = list(FIX_3_VECTOR),
-        FIX_4_VECTOR = list(FIX_4_VECTOR),
-        FIX_5_VECTOR = list(FIX_5_VECTOR),
-        FIX_6_VECTOR = list(FIX_6_VECTOR),
-        FIX_7_VECTOR = list(FIX_7_VECTOR),
-        FIX_8_VECTOR = list(FIX_8_VECTOR),
-        FIX_9_VECTOR = list(FIX_9_VECTOR),
-        FIX_10_VECTOR = list(FIX_10_VECTOR),
-      )
+      summarize(across(all_of(vector_cols), list), .groups = "drop")
+    
     
     
     # ============================Calculation of measures==================================== 
@@ -525,7 +517,6 @@ settings <- list(
             warning("Multiple matches for img_name: ", img_name)
             return(NA)
           }
-          
           FIXATIONS_X <- IMAGES_DF$FIXATIONS_X[[idx]]
           FIXATIONS_Y <- IMAGES_DF$FIXATIONS_Y[[idx]]
           
@@ -554,7 +545,6 @@ settings <- list(
             fix_i_y <- FIXATIONS_Y[i, fix_num]
             products[i] <- calc_orthogonal_distance(fix_i_x, fix_i_y, x1, y1, x2, y2)
           }
-          
           return(products)
         },
         MSC$subjectnum,
@@ -681,44 +671,6 @@ settings <- list(
     
     
     # ============================Analysis==================================== 
-    cat("\n ================ Current Settings: ", settings$prev_condition, " ", settings$curr_condition , "===============\n\n")
-    # # Vector Difference Analysis
-    # get_color <- function(base, score, dir){
-    #   print(base)
-    #   print(score)
-    #   if(dir*base > dir*score){
-    #     return(red)
-    #   } else{
-    #     return(green)
-    #   }
-    # }
-    # 
-    # print_colored_table <- function(df, dir){
-    #   for (i in 1:nrow(df)) {
-    #     base <- df[i, "Measure"]
-    #     row_text <- ""
-    #     if(is.na(base)){
-    #       continue
-    #     }
-    #     
-    #     for (j in 1:ncol(df)) {
-    #       value <- df[i, j]
-    #       if (names(df)[j] == "Measure") {
-    #         # Print Measure column without coloring
-    #         cell <- invisible(sprintf("%4s", value))
-    #       } else {
-    #         color_fun <- get_color(base, value, dir)
-    #         cell <- color_fun(sprintf("%4s", value))
-    #       }
-    #       
-    #       row_text <- paste0(row_text, " ", cell)
-    #     }
-    #     
-    #     cat(row_text, "\n")
-    #   }
-    # }
-    
-    
     MSC <- MSC%>%mutate(
       PREV_OBJ_FIX_DOT_PRODUCT_1 = sapply(PREV_OBJ_FIX_DOT_PRODUCT, function(x) x[1]),
       PREV_OBJ_FIX_DOT_PRODUCT_2 = sapply(PREV_OBJ_FIX_DOT_PRODUCT, function(x) x[2]),
@@ -727,10 +679,11 @@ settings <- list(
       PREV_OBJ_FIX_DOT_PRODUCT_5 = sapply(PREV_OBJ_FIX_DOT_PRODUCT, function(x) x[5]),
       PREV_OBJ_FIX_DOT_PRODUCT_6 = sapply(PREV_OBJ_FIX_DOT_PRODUCT, function(x) x[6]),
       PREV_OBJ_FIX_DOT_PRODUCT_7 = sapply(PREV_OBJ_FIX_DOT_PRODUCT, function(x) x[7]),
-      PREV_OBJ_FIX_DOT_PRODUCT_8 = sapply(PREV_OBJ_FIX_DOT_PRODUCT, function(x) x[8])
+      PREV_OBJ_FIX_DOT_PRODUCT_8 = sapply(PREV_OBJ_FIX_DOT_PRODUCT, function(x) x[8]),
+      PREV_OBJ_FIX_DOT_PRODUCT_9 = sapply(PREV_OBJ_FIX_DOT_PRODUCT, function(x) x[9]),
+      PREV_OBJ_FIX_DOT_PRODUCT_10 = sapply(PREV_OBJ_FIX_DOT_PRODUCT, function(x) x[10])
     )
     
-    cat("\n ========Angles=======\n\n")
     df <- data.frame(Measure = character(),
                      Subject_BL = character(),
                      Image_BL = character(),
@@ -745,11 +698,9 @@ settings <- list(
       row = c(mean_1, mean_2, mean_3)
       df <- rbind(df, data.frame(Measure = row[1], Subject_BL = row[2], Image_BL = row[3], stringsAsFactors = FALSE))
     }
-    df <- format(df, digits = 2, nsmall = gg2)
+    df <- format(df, digits = 2, nsmall = 2)
     df[] <- lapply(df, as.numeric)
-    # df$Subject_BL <- df$Measure - df$Subject_BL 
-    # df$Image_BL <- df$Measure - df$Image_BL
-    print(df)
+    df_angles <- df
     
     # OG Distance Comparison
     MSC <- MSC%>%mutate(
@@ -760,10 +711,11 @@ settings <- list(
       PREV_ORTHOGONAL_DISTANCE_5 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[5]),
       PREV_ORTHOGONAL_DISTANCE_6 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[6]),
       PREV_ORTHOGONAL_DISTANCE_7 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[7]),
-      PREV_ORTHOGONAL_DISTANCE_8 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[8])
+      PREV_ORTHOGONAL_DISTANCE_8 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[8]),
+      PREV_ORTHOGONAL_DISTANCE_9 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[9]),
+      PREV_ORTHOGONAL_DISTANCE_10 = sapply(PREV_ORTHOGONAL_DISTANCE, function(x) x[10])
     )
     
-    cat("\n ========Distance=======\n\n")
     df <- data.frame(Measure = character(),
                      Subject_BL = character(),
                      Image_BL = character(),
@@ -780,86 +732,107 @@ settings <- list(
     }
     df <- format(df, digits = 2, nsmall = 2)
     df[] <- lapply(df, as.numeric)
-    # df$Subject_BL <-df$Subject_BL - df$Measure
-    # df$Image_BL <-df$Image_BL - df$Measure
-    print(df)    
-    
-    # MSC_DOT_PRODUCTS <- MSC[, c("PREV_OBJ_FIX_DOT_PRODUCT_1", "AVG_DIST_FIX_1_PREV_OBJ_DOT_PRODUCT","PREV_OBJ_FIX_DOT_PRODUCT_2", "AVG_DIST_FIX_2_PREV_OBJ_DOT_PRODUCT", "PREV_OBJ_FIX_DOT_PRODUCT_3", "AVG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT")]
-    # 
-    # 
-    # # Draw subject fixation i distribution
-    # vec_list <- PREV_CURR_ABSENT_FIX_VECTORS$FIX_1_VECTOR[[settings$test_subject]]
-    # coords <- do.call(rbind, vec_list)
-    # 
-    # # Base plot on XY plane
-    # plot(
-    #   coords[,1], coords[,2],
-    #   xlab = "X", ylab = "Y",
-    #   main = "Subject 1 Fix 1 Distribution",
-    #   xlim = c(-180, 180),  # add some padding
-    #   ylim = c(-180, 180),
-    #   pch = 19, col = "blue", asp = 1
-    # )
-    # arrows(0, 0, coords[,1], coords[,2], length = 0.1, col = "red")
-    # 
-    # 
-    # MSC <- MSC %>%
-    #   mutate(PO_COORDS = pmap(
-    #     list(PREV_OBJECT_X1, PREV_OBJECT_X2, PREV_OBJECT_Y1, PREV_OBJECT_Y2),
-    #     ~ c((..1 + ..2)/2, (..3 + ..4)/2)
-    #   ))
-    # 
-    # MSC <- MSC %>%
-    #   mutate(
-    #     RESULT = map(PO_COORDS, ~ get_diff_vector(.x, CENTER))
-    #   )
-    # 
-    # 
-    # # Draw subject fixation i distribution
-    # vec_list <- MSC$RESULT
-    # coords <- do.call(rbind, vec_list)
-    # 
-    # # Base plot on XY plane
-    # plot(
-    #   coords[,1], coords[,2],
-    #   xlab = "X", ylab = "Y",
-    #   main = "Subject 1 Images Coords Distribution",
-    #   xlim = c(-380, 380),  # add some padding
-    #   ylim = c(-250, 250),
-    #   pch = 19, col = "blue", asp = 1
-    # )
-    # arrows(0, 0, coords[,1], coords[,2], length = 0.1, col = "red")
+    df_distances <- df
+    return(list(df_angles=df_angles, df_distances=df_distances))
+}
 
-# }
+curr_conditions = list('absent')
+object = list('m', 'c')
+results_dfs = list()
+for(i in 1:5){
+  settings$POL_EFFECT_ORDER = i
+  for(obj in object){
+    settings$object = obj
+    for(cond in curr_conditions){
+      cat("\n ================ Current Settings: ", settings$prev_condition, " ", settings$curr_condition , settings$object, "===============\n\n")
+      settings$curr_condition = cond
+      results <- run_script()
+      df_angles = results$df_angles
+      df_distances = results$df_distances
+      cat("\n ========Angles=======\n\n")
+      print(df_angles)
+      cat("\n ========Distance=======\n\n")
+      print(df_distances)
+      results_name = paste0(obj, "_N_", i, "_", cond, '_', 'angles')
+      results_dfs[[results_name]] = df_angles
+      results_name = paste0(obj, "_N_", i, "_", cond, '_', 'distances')
+      results_dfs[[results_name]] = df_distances
+    }
+  }
+}
 
 
-# curr_conditions = list(FALSE)
-# for(cond in curr_conditions){
-#   settings$curr_condition = cond
-#   MSC <- MSC_ORIGINAL
-#   run_script()
-# }
-# 
+plot_results <- function(df, name) {
+  df$Index <- 1:nrow(df)
+  df_long <- pivot_longer(df, cols = c(Measure, Subject_BL, Image_BL),
+                          names_to = "Variable", values_to = "Value")
+  title = paste0()
+  ggplot(df_long, aes(x = Index, y = Value, color = Variable)) +
+    geom_line() +
+    geom_point() +
+    labs(title = name, x = "Fixation", y = "Value") +
+    theme_minimal()
+}
 
-# MSC$diff <- -MSC$PREV_ORTHOGONAL_DISTANCE_2 + MSC$MEAN_OG_DISTANCE  
+for(name in names(results_dfs)){
+  plt<- plot_results(results_dfs[[name]], name)
+  
+  ggsave(paste0("results/",name,".jpg"), plot = plt, width = 6, height = 4, dpi = 300)
+}
+
+# Complete the graphing for all variation of (micro, clock) x (curr_cond: present, absent, any)
+
 
 #write.csv(MSC[, c("AVG_CURR_IMG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT", "PREV_OBJ_FIX_DOT_PRODUCT_3", "AVG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT")], file = "dot_products.csv")
 # write.csv(MSC[, c("PREV_ORTHOGONAL_DISTANCE_2", "CENTER_OG_DISTANCE", "MEAN_OG_DISTANCE", "AVG_FIX_OG_DISTANCE")], file = "MUTATED_MSC.csv")
 # write_json(MSC, "__data.json", pretty = TRUE)
 
+# Draw Fixations Dist'
 
-
-# TODO
-# (N-2) effect ✅ 
-# Image-based baseline for distance ✅ 
-# Remove > 25% microwaves trials ✅ 
-# Manipulate filtration with possible combinations of present, absent ✅ 
-# Code Review
-# Run all above on clocks
+# MSC_DOT_PRODUCTS <- MSC[, c("PREV_OBJ_FIX_DOT_PRODUCT_1", "AVG_DIST_FIX_1_PREV_OBJ_DOT_PRODUCT","PREV_OBJ_FIX_DOT_PRODUCT_2", "AVG_DIST_FIX_2_PREV_OBJ_DOT_PRODUCT", "PREV_OBJ_FIX_DOT_PRODUCT_3", "AVG_DIST_FIX_3_PREV_OBJ_DOT_PRODUCT")]
+# 
+# 
+# # Draw subject fixation i distribution
+# vec_list <- PREV_CURR_ABSENT_FIX_VECTORS$FIX_1_VECTOR[[settings$test_subject]]
+# coords <- do.call(rbind, vec_list)
+# 
+# # Base plot on XY plane
+# plot(
+#   coords[,1], coords[,2],
+#   xlab = "X", ylab = "Y",
+#   main = "Subject 1 Fix 1 Distribution",
+#   xlim = c(-180, 180),  # add some padding
+#   ylim = c(-180, 180),
+#   pch = 19, col = "blue", asp = 1
+# )
+# arrows(0, 0, coords[,1], coords[,2], length = 0.1, col = "red")
+# 
+# 
+# MSC <- MSC %>%
+#   mutate(PO_COORDS = pmap(
+#     list(PREV_OBJECT_X1, PREV_OBJECT_X2, PREV_OBJECT_Y1, PREV_OBJECT_Y2),
+#     ~ c((..1 + ..2)/2, (..3 + ..4)/2)
+#   ))
+# 
+# MSC <- MSC %>%
+#   mutate(
+#     RESULT = map(PO_COORDS, ~ get_diff_vector(.x, CENTER))
+#   )
+# 
+# 
+# # Draw subject fixation i distribution
+# vec_list <- MSC$RESULT
+# coords <- do.call(rbind, vec_list)
+# 
+# # Base plot on XY plane
+# plot(
+#   coords[,1], coords[,2],
+#   xlab = "X", ylab = "Y",
+#   main = "Subject 1 Images Coords Distribution",
+#   xlim = c(-380, 380),  # add some padding
+#   ylim = c(-250, 250),
+#   pch = 19, col = "blue", asp = 1
+# )
+# arrows(0, 0, coords[,1], coords[,2], length = 0.1, col = "red")
 
     
-# Graph with raw data
-df <- df%>% pivot_longer(Measure: Image_BL, names_to = "measure_type", values_to = "Distance")
-df%>%ggplot() + geom_path(aes(x = as.numeric(fixation), y = Distance, color=measure_type))
-
-# Complete the graphing for all variation of (micro, clock) x (curr_cond: present, absent, any)
