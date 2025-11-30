@@ -8,8 +8,6 @@ library(tidyverse)
 library(purrr)
 library(crayon)
 
-## fix the priming of last fixation analysis and also the baseline analysis  
-
 # Define script settings
 settings <<- list(
   object = 'm',
@@ -1404,5 +1402,6 @@ model_4 = brms::brm(model,
 )
 prior_summary(model_4)
 summary(model_4)
+
 
 
